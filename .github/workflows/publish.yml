@@ -9,6 +9,10 @@ jobs:
   publish:
     name: Build, Test, and Publish
     runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - name: Checkout code
@@ -39,9 +43,7 @@ jobs:
         echo "Version: $(grep -oP '(?<=<Version>)[^<]+' src/MDTool/MDTool.csproj)"
 
     - name: Publish to NuGet
-      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
 
     - name: Upload package as artifact
       uses: actions/upload-artifact@v4
