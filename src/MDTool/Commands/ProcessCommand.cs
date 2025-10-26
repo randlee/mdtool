@@ -39,11 +39,43 @@ public class ProcessCommand : Command
             description: "Overwrite existing output file");
         forceOption.AddAlias("-f");
 
+        // Conditional options
+        var enableConditionsOption = new Option<bool>(
+            name: "--enable-conditions",
+            description: "Enable conditional evaluation ({{#if}}, {{else}}, {{/if}})");
+
+        var strictConditionsOption = new Option<bool>(
+            name: "--strict-conditions",
+            description: "Unknown variables in conditionals cause errors; enables case-sensitive string comparison");
+
+        var conditionsTraceOutOption = new Option<string?>(
+            name: "--conditions-trace-out",
+            description: "Write conditional evaluation trace to file (JSON format)");
+
+        var conditionsTraceStderrOption = new Option<bool>(
+            name: "--conditions-trace-stderr",
+            description: "Write conditional evaluation trace to stderr");
+
+        var conditionsMaxDepthOption = new Option<int>(
+            name: "--conditions-max-depth",
+            description: "Maximum nesting depth for conditional blocks",
+            getDefaultValue: () => 5);
+
+        var parseFencesOption = new Option<bool>(
+            name: "--parse-fences",
+            description: "Evaluate conditional tags inside code fences (default: false)");
+
         // Add to command
         AddArgument(fileArgument);
         AddOption(argsOption);
         AddOption(outputOption);
         AddOption(forceOption);
+        AddOption(enableConditionsOption);
+        AddOption(strictConditionsOption);
+        AddOption(conditionsTraceOutOption);
+        AddOption(conditionsTraceStderrOption);
+        AddOption(conditionsMaxDepthOption);
+        AddOption(parseFencesOption);
 
         // Set handler
         this.SetHandler(async (context) =>
@@ -52,7 +84,24 @@ public class ProcessCommand : Command
             var args = context.ParseResult.GetValueForOption(argsOption);
             var output = context.ParseResult.GetValueForOption(outputOption);
             var force = context.ParseResult.GetValueForOption(forceOption);
-            context.ExitCode = await ExecuteAsync(file, args!, output, force);
+            var enableConditions = context.ParseResult.GetValueForOption(enableConditionsOption);
+            var strictConditions = context.ParseResult.GetValueForOption(strictConditionsOption);
+            var conditionsTraceOut = context.ParseResult.GetValueForOption(conditionsTraceOutOption);
+            var conditionsTraceStderr = context.ParseResult.GetValueForOption(conditionsTraceStderrOption);
+            var conditionsMaxDepth = context.ParseResult.GetValueForOption(conditionsMaxDepthOption);
+            var parseFences = context.ParseResult.GetValueForOption(parseFencesOption);
+
+            context.ExitCode = await ExecuteAsync(
+                file,
+                args!,
+                output,
+                force,
+                enableConditions,
+                strictConditions,
+                conditionsTraceOut,
+                conditionsTraceStderr,
+                conditionsMaxDepth,
+                parseFences);
         });
     }
 
@@ -60,8 +109,16 @@ public class ProcessCommand : Command
         string filePath,
         string argsPath,
         string? outputPath,
-        bool forceOverwrite)
+        bool forceOverwrite,
+        bool enableConditions,
+        bool strictConditions,
+        string? conditionsTraceOut,
+        bool conditionsTraceStderr,
+        int conditionsMaxDepth,
+        bool parseFences)
     {
+        ConditionalTrace? trace = null;
+
         try
         {
             // Step 1: Read and parse markdown file
@@ -92,11 +149,52 @@ public class ProcessCommand : Command
 
             var args = argsResult.Value!;
 
-            // Step 3: Perform variable substitution
+            // Step 3: Merge args with YAML defaults
+            var mergedArgs = new Dictionary<string, object>(args, StringComparer.OrdinalIgnoreCase);
+            foreach (var varDef in document.Variables.Values)
+            {
+                if (!varDef.Required && varDef.DefaultValue != null)
+                {
+                    // Only add default if not already present
+                    if (!mergedArgs.ContainsKey(varDef.Name))
+                    {
+                        mergedArgs[varDef.Name] = varDef.DefaultValue;
+                    }
+                }
+            }
+
+            // Step 4: Evaluate conditionals if enabled
+            string effectiveContent = document.Content;
+
+            if (enableConditions)
+            {
+                var accessor = new ArgsJsonAccessor(mergedArgs);
+                var options = new ConditionalOptions(
+                    Strict: strictConditions,
+                    CaseSensitiveStrings: strictConditions,
+                    MaxNesting: conditionsMaxDepth
+                );
+
+                var evalResult = ConditionalEvaluator.EvaluateDetailed(
+                    document.Content,
+                    accessor,
+                    options);
+
+                if (!evalResult.Success)
+                {
+                    Console.WriteLine(JsonOutput.Failure(evalResult.Errors));
+                    return 1;
+                }
+
+                effectiveContent = evalResult.Value.content;
+                trace = evalResult.Value.trace;
+            }
+
+            // Step 5: Perform variable substitution on effective content
             var substitutionResult = VariableSubstitutor.Substitute(
-                document.Content,
+                effectiveContent,
                 document.Variables,
-                args);
+                mergedArgs);
 
             if (!substitutionResult.Success)
             {
@@ -106,7 +204,7 @@ public class ProcessCommand : Command
 
             var processedContent = substitutionResult.Value!;
 
-            // Step 4: Check file overwrite protection
+            // Step 6: Check file overwrite protection
             if (!string.IsNullOrEmpty(outputPath))
             {
                 if (File.Exists(outputPath) && !forceOverwrite)
@@ -117,7 +215,23 @@ public class ProcessCommand : Command
                 }
             }
 
-            // Step 5: Output processed content
+            // Step 7: Write trace output if requested
+            if (trace != null)
+            {
+                var traceJson = SerializeTrace(trace);
+
+                if (!string.IsNullOrEmpty(conditionsTraceOut))
+                {
+                    await File.WriteAllTextAsync(conditionsTraceOut, traceJson);
+                }
+
+                if (conditionsTraceStderr)
+                {
+                    await Console.Error.WriteLineAsync(traceJson);
+                }
+            }
+
+            // Step 8: Output processed content
             if (string.IsNullOrEmpty(outputPath))
             {
                 // Output to stdout (raw content, not JSON wrapped)
@@ -198,6 +312,30 @@ public class ProcessCommand : Command
             JsonValueKind.Array => element,
             _ => element
         };
+    }
+
+    private static string SerializeTrace(ConditionalTrace trace)
+    {
+        var traceObj = new
+        {
+            blocks = trace.Blocks.Select(b => new
+            {
+                startLine = b.StartLine,
+                endLine = b.EndLine,
+                branches = b.Branches.Select(br => new
+                {
+                    kind = br.Kind,
+                    expr = br.Expr,
+                    taken = br.Taken
+                })
+            })
+        };
+
+        return JsonSerializer.Serialize(traceObj, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
     }
 
     private static int HandleException(Exception ex)

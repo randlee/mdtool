@@ -1,0 +1,6 @@
+{
+  "role": "TEST",
+  "agent": "qa-test-1",
+  "debug": true,
+  "environment": "DEV"
+}

@@ -16,6 +16,7 @@ MDTool is a .NET command-line tool that enables powerful variable substitution i
 - **Auto-Header Generation**: Generate YAML frontmatter from existing markdown
 - **Overwrite Protection**: Prevent accidental file overwrites with `--force` flag
 - **Structured Errors**: All errors returned as structured JSON
+- **Conditional Sections (v1.1.0+)**: Include/exclude content based on variables (e.g., role-based templates)
 
 ## Installation
 
@@ -418,6 +419,426 @@ variables:
 }
 ```
 
+## Conditional Sections (v1.1.0+)
+
+As of v1.1.0, MDTool supports conditional sections that allow a single template to target multiple roles or scenarios. This is perfect for QA agent roles (TEST vs REPORT), environment-specific content (DEV vs PROD), or any scenario where content should vary based on variables.
+
+### Overview
+
+Conditional sections use familiar syntax to include or exclude content based on boolean expressions:
+
+```markdown
+{{#if ROLE == 'TEST'}}
+  Content shown only when ROLE is TEST
+{{else if ROLE == 'REPORT'}}
+  Content shown only when ROLE is REPORT
+{{else}}
+  Content shown when neither condition is true
+{{/if}}
+```
+
+**Key Features:**
+- Expressions evaluated against provided variables
+- Nested conditionals supported (up to 10 levels)
+- Type-aware comparisons (string, number, boolean)
+- Built-in functions: contains, startsWith, endsWith, in, exists
+- Content-scoped validation (only variables in effective content are required)
+- Debug trace output for complex logic
+
+### Syntax
+
+#### Basic Conditional
+
+```markdown
+{{#if ENVIRONMENT == 'PROD'}}
+This content appears only in production.
+{{/if}}
+```
+
+#### If-Else
+
+```markdown
+{{#if DEBUG == true}}
+Debug mode is enabled.
+{{else}}
+Debug mode is disabled.
+{{/if}}
+```
+
+#### If-Else If-Else
+
+```markdown
+{{#if ROLE == 'TEST'}}
+## Running Tests
+Execute unit test suite.
+{{else if ROLE == 'REPORT'}}
+## Generating Report
+Gather metrics and create quality report.
+{{else}}
+## Unknown Role
+No action defined for this role.
+{{/if}}
+```
+
+#### Nested Conditionals
+
+```markdown
+{{#if ROLE == 'TEST'}}
+## Test Execution
+
+{{#if ENVIRONMENT == 'DEV'}}
+Running in development environment.
+{{else}}
+Running in {{ENVIRONMENT}} environment.
+{{/if}}
+
+{{/if}}
+```
+
+### Expression Operators
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `==` | Equality (type-aware) | `ROLE == 'TEST'` |
+| `!=` | Inequality (type-aware) | `ROLE != 'REPORT'` |
+| `&&` | Logical AND | `ROLE == 'TEST' && DEBUG == true` |
+| `\|\|` | Logical OR | `ROLE == 'TEST' \|\| ROLE == 'REPORT'` |
+| `!` | Logical NOT | `!DEBUG` |
+| `()` | Grouping | `(A \|\| B) && C` |
+
+**Type Awareness:**
+- String comparisons: `ROLE == 'TEST'`
+- Number comparisons: `PORT == 8080`
+- Boolean comparisons: `DEBUG == true`
+- Mismatched types: `PORT == '8080'` → false (number != string)
+
+### Functions
+
+#### contains(haystack, needle)
+
+Tests if a string contains a substring.
+
+```markdown
+{{#if ROLE.Contains('TEST')}}
+Role contains 'TEST'
+{{/if}}
+
+{{#if contains(AGENT, 'QA')}}
+Agent name contains 'QA'
+{{/if}}
+```
+
+**Case Behavior:**
+- Default: Case-insensitive
+- With `--strict-conditions`: Case-sensitive
+
+#### startsWith(text, prefix)
+
+Tests if a string starts with a prefix.
+
+```markdown
+{{#if AGENT.StartsWith('QA')}}
+Agent name starts with 'QA'
+{{/if}}
+
+{{#if startsWith(ROLE, 'TEST')}}
+Role starts with 'TEST'
+{{/if}}
+```
+
+#### endsWith(text, suffix)
+
+Tests if a string ends with a suffix.
+
+```markdown
+{{#if ENVIRONMENT.EndsWith('PROD')}}
+Production environment detected
+{{/if}}
+```
+
+#### in(value, array)
+
+Tests if a value is in an array.
+
+```markdown
+{{#if in(ROLE, ['TEST', 'REPORT', 'AUDIT'])}}
+Role is one of: TEST, REPORT, or AUDIT
+{{/if}}
+
+{{#if in(PORT, [8080, 3000, 5000])}}
+Port is a standard port
+{{/if}}
+```
+
+#### exists(VAR)
+
+Tests if a variable is present in arguments.
+
+```markdown
+{{#if exists(AGENT)}}
+Agent is defined: {{AGENT}}
+{{else}}
+No agent specified
+{{/if}}
+```
+
+### CLI Options
+
+Both `process` and `validate` commands support conditional options:
+
+#### --no-conditions
+
+Disable conditional evaluation; treat tags as literal text.
+
+```bash
+mdtool process template.md --args args.json --no-conditions
+```
+
+**Use Case:** Backward compatibility or generating output for another system that will process conditionals.
+
+#### --strict-conditions
+
+Enable strict mode for conditional evaluation.
+
+```bash
+mdtool process template.md --args args.json --strict-conditions
+```
+
+**Behavior:**
+- Unknown variables cause errors (instead of evaluating to false)
+- String comparisons are case-sensitive (instead of case-insensitive)
+
+**Use Case:** Catch typos in variable names, enforce exact string matching.
+
+#### --conditions-trace-out
+
+Write a JSON trace of conditional decisions to a file for debugging.
+
+```bash
+mdtool process template.md --args args.json --conditions-trace-out trace.json
+```
+
+**Trace Output:**
+```json
+{
+  "blocks": [
+    {
+      "startLine": 12,
+      "endLine": 26,
+      "branches": [
+        { "kind": "if", "expr": "ROLE == 'TEST'", "taken": false },
+        { "kind": "else-if", "expr": "ROLE == 'REPORT'", "taken": true },
+        { "kind": "else", "taken": false }
+      ]
+    }
+  ]
+}
+```
+
+#### --require-all-yaml (validate only)
+
+Require all YAML-declared required variables, even if not in effective content.
+
+```bash
+mdtool validate template.md --args args.json --require-all-yaml
+```
+
+**Default (Content-Scoped):** Only variables in effective content (kept branches) are required.
+
+**With --require-all-yaml:** All YAML-required variables must be provided.
+
+### Validation Modes
+
+#### Content-Scoped Validation (Default)
+
+Only variables referenced in effective content are required.
+
+**Template:**
+```yaml
+---
+variables:
+  ROLE:
+    description: "Agent role"
+    required: true
+  TEST_VAR:
+    description: "Test variable"
+    required: true
+  REPORT_VAR:
+    description: "Report variable"
+    required: true
+---
+
+{{#if ROLE == 'TEST'}}
+Use {{TEST_VAR}}
+{{else if ROLE == 'REPORT'}}
+Use {{REPORT_VAR}}
+{{/if}}
+```
+
+**Args (ROLE=TEST):**
+```json
+{
+  "role": "TEST",
+  "testVar": "value"
+}
+```
+
+**Result:** Success (REPORT_VAR not required because it's in excluded branch)
+
+#### All-YAML Validation Mode
+
+With `--require-all-yaml`, all YAML-required variables must be provided.
+
+**Same template and args as above**
+
+**Result:** Failure (REPORT_VAR is required by YAML even though it's in excluded branch)
+
+### Debugging with Trace Output
+
+Use `--conditions-trace-out` to debug complex conditional logic:
+
+**Template:**
+```markdown
+{{#if ROLE == 'TEST'}}
+Test content
+{{else if ROLE == 'REPORT' && exists(AGENT)}}
+Report content with agent
+{{else if ROLE == 'REPORT'}}
+Report content without agent
+{{else}}
+Unknown role
+{{/if}}
+```
+
+**Command:**
+```bash
+mdtool process template.md --args args.json --conditions-trace-out trace.json
+```
+
+**Trace shows:**
+- Which branch was taken
+- Why other branches were skipped
+- Expression evaluation results
+- Line numbers for each block
+
+### Code Fence Protection
+
+**Important:** Conditional tags inside code fences are **still parsed**. MDTool does not perform language-sensitive parsing.
+
+**Example:**
+```markdown
+{{#if ROLE == 'TEST'}}
+```bash
+echo "{{VARIABLE}}"
+```
+{{/if}}
+```
+
+**Behavior:**
+- Outer `{{#if}}` is evaluated
+- Inner `{{VARIABLE}}` is treated as a variable placeholder
+- Code fences do not create "literal zones"
+
+### Complete Example: Role-Based Template
+
+**Template (template.md):**
+```markdown
+---
+variables:
+  ROLE:
+    description: "Agent role (TEST or REPORT)"
+    required: true
+  AGENT:
+    description: "Agent identifier"
+    required: false
+    default: "qa-1"
+  DEBUG:
+    description: "Enable debug output"
+    default: false
+  ENVIRONMENT:
+    description: "Environment (DEV or PROD)"
+    default: "DEV"
+---
+
+# QA Execution Agent: {{AGENT}}
+
+{{#if ROLE == 'TEST' || ROLE == 'REPORT'}}
+## Shared Setup
+- Initialize environment: {{ENVIRONMENT}}
+- Agent: {{AGENT}}
+{{/if}}
+
+{{#if ROLE == 'TEST'}}
+## Unit Test Execution
+- Run test suite
+- Collect coverage metrics
+- Report failures
+
+{{#if DEBUG}}
+Debug mode enabled: Verbose output active
+{{/if}}
+
+{{else if ROLE == 'REPORT'}}
+## Quality Report Generation
+- Gather metrics
+- Analyze trends
+- Generate report
+
+{{#if ENVIRONMENT == 'PROD'}}
+Publishing report to production dashboard
+{{else}}
+Generating local report only
+{{/if}}
+
+{{else}}
+## No-op Mode
+No action defined for role: {{ROLE}}
+{{/if}}
+
+---
+Execution complete.
+```
+
+**Args for TEST role (test-args.json):**
+```json
+{
+  "role": "TEST",
+  "agent": "qa-test-1",
+  "debug": true,
+  "environment": "DEV"
+}
+```
+
+**Args for REPORT role (report-args.json):**
+```json
+{
+  "role": "REPORT",
+  "agent": "qa-report-1",
+  "debug": false,
+  "environment": "PROD"
+}
+```
+
+**Process TEST scenario:**
+```bash
+mdtool process template.md --args test-args.json --output test-output.md
+```
+
+**Process REPORT scenario:**
+```bash
+mdtool process template.md --args report-args.json --output report-output.md
+```
+
+**Validate both scenarios:**
+```bash
+mdtool validate template.md --args test-args.json
+mdtool validate template.md --args report-args.json
+```
+
+See `examples/conditionals.md` for a complete working example.
+
+---
+
 ## Error Handling
 
 All errors are returned as structured JSON with clear messages.
@@ -684,7 +1105,7 @@ Contributions are welcome! Please follow these guidelines:
 
 ## Roadmap
 
-### Phase 1 (Current) - MVP
+### Phase 1 - MVP (Complete)
 - [x] Variable substitution
 - [x] YAML frontmatter parsing
 - [x] Schema generation
@@ -693,17 +1114,26 @@ Contributions are welcome! Please follow these guidelines:
 - [x] Optional variables
 - [x] Case-insensitive matching
 
-### Phase 2 - Macro System
+### Phase 2 - Conditional Sections (Complete v1.1.0)
+- [x] Conditional logic: `{{#if}}`, `{{else if}}`, `{{else}}`, `{{/if}}`
+- [x] Expression operators: `==`, `!=`, `&&`, `||`, `!`, `()`
+- [x] Built-in functions: `contains`, `startsWith`, `endsWith`, `in`, `exists`
+- [x] Type-aware comparisons (string, number, boolean)
+- [x] Content-scoped validation
+- [x] Debug trace output
+- [x] Strict mode for error checking
+
+### Phase 3 - Macro System (Planned)
 - [ ] Built-in macros: `{{DATE}}`, `{{TIME}}`, `{{DATETIME}}`
 - [ ] Environment variable expansion: `{{env:VAR_NAME}}`
 - [ ] File expansion: `{{file:path}}` in markdown
 - [ ] File references: `"file:path"` in JSON
 
-### Phase 3 - Advanced Features
-- [ ] Loop support: `{{FOREACH items}}`
-- [ ] Conditional logic: `{{IF condition}}`
+### Phase 4 - Advanced Features (Planned)
+- [ ] Loop support: `{{#each items}}`
 - [ ] Built-in functions: `{{UPPER:var}}`, `{{LOWER:var}}`
 - [ ] String functions: `{{LEN:var}}`, `{{JOIN:array:,}}`
+- [ ] Array filtering and transformations
 
 ## License
 

@@ -29,21 +29,86 @@ public class ValidateCommand : Command
         };
         argsOption.AddAlias("-a");
 
+        // Conditional options
+        var enableConditionsOption = new Option<bool>(
+            name: "--enable-conditions",
+            description: "Enable conditional evaluation ({{#if}}, {{else}}, {{/if}})");
+
+        var strictConditionsOption = new Option<bool>(
+            name: "--strict-conditions",
+            description: "Unknown variables in conditionals cause errors; enables case-sensitive string comparison");
+
+        var conditionsTraceOutOption = new Option<string?>(
+            name: "--conditions-trace-out",
+            description: "Write conditional evaluation trace to file (JSON format)");
+
+        var conditionsTraceStderrOption = new Option<bool>(
+            name: "--conditions-trace-stderr",
+            description: "Write conditional evaluation trace to stderr");
+
+        var conditionsMaxDepthOption = new Option<int>(
+            name: "--conditions-max-depth",
+            description: "Maximum nesting depth for conditional blocks",
+            getDefaultValue: () => 5);
+
+        var parseFencesOption = new Option<bool>(
+            name: "--parse-fences",
+            description: "Evaluate conditional tags inside code fences (default: false)");
+
+        var requireAllYamlOption = new Option<bool>(
+            name: "--require-all-yaml",
+            description: "Require all YAML-declared required variables regardless of content usage");
+
         // Add to command
         AddArgument(fileArgument);
         AddOption(argsOption);
+        AddOption(enableConditionsOption);
+        AddOption(strictConditionsOption);
+        AddOption(conditionsTraceOutOption);
+        AddOption(conditionsTraceStderrOption);
+        AddOption(conditionsMaxDepthOption);
+        AddOption(parseFencesOption);
+        AddOption(requireAllYamlOption);
 
         // Set handler
         this.SetHandler(async (context) =>
         {
             var file = context.ParseResult.GetValueForArgument(fileArgument);
             var args = context.ParseResult.GetValueForOption(argsOption);
-            context.ExitCode = await ExecuteAsync(file, args!);
+            var enableConditions = context.ParseResult.GetValueForOption(enableConditionsOption);
+            var strictConditions = context.ParseResult.GetValueForOption(strictConditionsOption);
+            var conditionsTraceOut = context.ParseResult.GetValueForOption(conditionsTraceOutOption);
+            var conditionsTraceStderr = context.ParseResult.GetValueForOption(conditionsTraceStderrOption);
+            var conditionsMaxDepth = context.ParseResult.GetValueForOption(conditionsMaxDepthOption);
+            var parseFences = context.ParseResult.GetValueForOption(parseFencesOption);
+            var requireAllYaml = context.ParseResult.GetValueForOption(requireAllYamlOption);
+
+            context.ExitCode = await ExecuteAsync(
+                file,
+                args!,
+                enableConditions,
+                strictConditions,
+                conditionsTraceOut,
+                conditionsTraceStderr,
+                conditionsMaxDepth,
+                parseFences,
+                requireAllYaml);
         });
     }
 
-    private static async Task<int> ExecuteAsync(string filePath, string argsPath)
+    private static async Task<int> ExecuteAsync(
+        string filePath,
+        string argsPath,
+        bool enableConditions,
+        bool strictConditions,
+        string? conditionsTraceOut,
+        bool conditionsTraceStderr,
+        int conditionsMaxDepth,
+        bool parseFences,
+        bool requireAllYaml)
     {
+        ConditionalTrace? trace = null;
+
         try
         {
             // Step 1: Read and parse markdown file
@@ -74,10 +139,71 @@ public class ValidateCommand : Command
 
             var args = argsResult.Value!;
 
-            // Step 3: Validate arguments
-            var validationResult = ValidateArgs(document.Variables, document.Content, args);
+            // Step 3: Merge args with YAML defaults
+            var mergedArgs = new Dictionary<string, object>(args, StringComparer.OrdinalIgnoreCase);
+            foreach (var varDef in document.Variables.Values)
+            {
+                if (!varDef.Required && varDef.DefaultValue != null)
+                {
+                    // Only add default if not already present
+                    if (!mergedArgs.ContainsKey(varDef.Name))
+                    {
+                        mergedArgs[varDef.Name] = varDef.DefaultValue;
+                    }
+                }
+            }
 
-            // Step 4: Output validation result
+            // Step 4: Evaluate conditionals if enabled
+            string effectiveContent = document.Content;
+
+            if (enableConditions)
+            {
+                var accessor = new ArgsJsonAccessor(mergedArgs);
+                var options = new ConditionalOptions(
+                    Strict: strictConditions,
+                    CaseSensitiveStrings: strictConditions,
+                    MaxNesting: conditionsMaxDepth
+                );
+
+                var evalResult = ConditionalEvaluator.EvaluateDetailed(
+                    document.Content,
+                    accessor,
+                    options);
+
+                if (!evalResult.Success)
+                {
+                    Console.WriteLine(JsonOutput.Failure(evalResult.Errors));
+                    return 1;
+                }
+
+                effectiveContent = evalResult.Value.content;
+                trace = evalResult.Value.trace;
+            }
+
+            // Step 5: Validate arguments
+            var validationResult = ValidateArgs(
+                document.Variables,
+                effectiveContent,
+                mergedArgs,
+                requireAllYaml);
+
+            // Step 6: Write trace output if requested
+            if (trace != null)
+            {
+                var traceJson = SerializeTrace(trace);
+
+                if (!string.IsNullOrEmpty(conditionsTraceOut))
+                {
+                    await File.WriteAllTextAsync(conditionsTraceOut, traceJson);
+                }
+
+                if (conditionsTraceStderr)
+                {
+                    await Console.Error.WriteLineAsync(traceJson);
+                }
+            }
+
+            // Step 7: Output validation result
             var output = new
             {
                 success = validationResult.Success,
@@ -160,7 +286,8 @@ public class ValidateCommand : Command
     private static ValidationResult ValidateArgs(
         Dictionary<string, VariableDefinition> variables,
         string content,
-        Dictionary<string, object> args)
+        Dictionary<string, object> args,
+        bool requireAllYaml)
     {
         // Extract variables used in content
         var usedVars = VariableExtractor.ExtractVariables(content);
@@ -169,48 +296,59 @@ public class ValidateCommand : Command
         var missing = new List<string>();
         var errors = new List<ValidationError>();
 
-        // Build complete args with defaults
-        var completeArgs = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        // Determine which variables to require
+        HashSet<string> requiredVars;
 
-        // Add provided args
-        foreach (var kvp in args)
+        if (requireAllYaml)
         {
-            completeArgs[kvp.Key] = kvp.Value;
+            // Require all YAML-declared required variables
+            requiredVars = new HashSet<string>(
+                variables.Values.Where(v => v.Required).Select(v => v.Name),
+                StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            // Content-scoped: only require variables used in effective content
+            requiredVars = new HashSet<string>(
+                usedVars.Where(v =>
+                    variables.TryGetValue(v, out var varDef) && varDef.Required),
+                StringComparer.OrdinalIgnoreCase);
         }
 
-        // Add defaults for optional variables
-        foreach (var varDef in variables.Values)
-        {
-            if (!varDef.Required && varDef.DefaultValue != null)
-            {
-                if (!HasValue(varDef.Name, completeArgs))
-                {
-                    completeArgs[varDef.Name] = varDef.DefaultValue;
-                }
-            }
-        }
-
-        // Validate each used variable
-        foreach (var varName in usedVars)
+        // Validate each required variable
+        foreach (var varName in requiredVars)
         {
             if (!variables.TryGetValue(varName, out var varDef))
             {
-                // Variable used but not defined
-                errors.Add(ValidationError.MissingVariable(varName, $"Variable '{varName}' is used but not defined in YAML frontmatter"));
+                // Variable required but not defined (shouldn't happen with requireAllYaml)
+                errors.Add(ValidationError.MissingVariable(varName, $"Variable '{varName}' is required but not defined in YAML frontmatter"));
                 missing.Add(varName);
                 continue;
             }
 
-            var value = ResolveVariable(varName, completeArgs);
+            var value = ResolveVariable(varName, args);
 
             if (value != null)
             {
                 provided.Add(varName);
             }
-            else if (varDef.Required)
+            else
             {
                 errors.Add(ValidationError.MissingVariable(varName, varDef.Description));
                 missing.Add(varName);
+            }
+        }
+
+        // Also check for variables used in content that are not defined
+        foreach (var varName in usedVars)
+        {
+            if (!variables.ContainsKey(varName))
+            {
+                errors.Add(ValidationError.MissingVariable(varName, $"Variable '{varName}' is used but not defined in YAML frontmatter"));
+                if (!missing.Contains(varName))
+                {
+                    missing.Add(varName);
+                }
             }
         }
 
@@ -323,6 +461,30 @@ public class ValidateCommand : Command
         }
 
         return null;
+    }
+
+    private static string SerializeTrace(ConditionalTrace trace)
+    {
+        var traceObj = new
+        {
+            blocks = trace.Blocks.Select(b => new
+            {
+                startLine = b.StartLine,
+                endLine = b.EndLine,
+                branches = b.Branches.Select(br => new
+                {
+                    kind = br.Kind,
+                    expr = br.Expr,
+                    taken = br.Taken
+                })
+            })
+        };
+
+        return JsonSerializer.Serialize(traceObj, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
     }
 
     private static int HandleException(Exception ex)
