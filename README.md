@@ -2,6 +2,11 @@
 
 **Markdown processing tool with YAML-defined variable substitution**
 
+[![CI](https://github.com/randlee/mdtool/actions/workflows/ci.yml/badge.svg)](https://github.com/randlee/mdtool/actions/workflows/ci.yml)
+[![NuGet Version](https://img.shields.io/nuget/v/Rand.MDTool)](https://www.nuget.org/packages/Rand.MDTool)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Rand.MDTool)](https://www.nuget.org/packages/Rand.MDTool)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 MDTool is a .NET command-line tool that enables powerful variable substitution in markdown files using YAML frontmatter definitions. Perfect for generating documentation, deployment plans, configuration files, and more from templates.
 
 ## Features
@@ -23,7 +28,7 @@ MDTool is a .NET command-line tool that enables powerful variable substitution i
 ### Install as Global Tool
 
 ```bash
-dotnet tool install --global MDTool
+dotnet tool install --global Rand.MDTool
 ```
 
 ### Build from Source
@@ -33,7 +38,7 @@ git clone https://github.com/yourusername/mdtool.git
 cd mdtool
 dotnet build
 dotnet pack -c Release -o nupkg
-dotnet tool install --global --add-source ./nupkg MDTool
+dotnet tool install --global --add-source ./nupkg Rand.MDTool
 ```
 
 ### Verify Installation
@@ -1073,13 +1078,13 @@ dotnet pack -c Release -o nupkg
 ### Install Local Package
 
 ```bash
-dotnet tool install --global --add-source ./nupkg MDTool
+dotnet tool install --global --add-source ./nupkg Rand.MDTool
 ```
 
 ### Uninstall
 
 ```bash
-dotnet tool uninstall --global MDTool
+dotnet tool uninstall --global Rand.MDTool
 ```
 
 ## Contributing

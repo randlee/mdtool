@@ -9,17 +9,24 @@
     <!-- Global Tool Configuration -->
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>mdtool</ToolCommandName>
-    <PackageId>MDTool</PackageId>
+    <PackageId>Rand.MDTool</PackageId>
     <Version>1.0.0</Version>
     <Authors>Randy Lee</Authors>
     <Description>Markdown processing tool with variable substitution and templating for AI agents and automation scripts</Description>
     <PackageTags>markdown;template;cli;dotnet-tool;automation</PackageTags>
     <RepositoryUrl>https://github.com/randlee/mdtool</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/randlee/mdtool</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageReference Include="YamlDotNet" Version="16.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>

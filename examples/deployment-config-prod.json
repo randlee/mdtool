@@ -1,0 +1,7 @@
+{
+  "environment": "production",
+  "app_name": "MyApp",
+  "feature_auth": true,
+  "feature_analytics": true,
+  "enable_monitoring": true
+}
