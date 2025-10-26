@@ -191,15 +191,161 @@ mdtool validate <file> --args <path>
 
 ### Options
 
-|| Option          | Type   | Required | Description                     |
-||-----------------|--------|----------|---------------------------------|
-|| `--args <path>` | string | Yes      | Path to JSON arguments file     |
+| Option          | Type   | Required | Description                     |
+|-----------------|--------|----------|---------------------------------|
+| `--args <path>` | string | Yes      | Path to JSON arguments file     |
+| `--conditions-trace-out <path>` | string | No | Write JSON trace of conditional decisions |
+| `--no-conditions` | flag | No | Skip conditional evaluation (tags remain as literals) |
+| `--strict-conditions` | flag | No | Unknown variables in expressions cause errors; case-sensitive string comparisons |
+| `--require-all-yaml` | flag | No | Require all YAML-required variables (not just content-scoped) |
 
-Additional options (conditionals):
-- `--conditions-trace-out <path>`: write JSON trace file of conditional decisions
-- `--no-conditions` (bool): Skip conditional evaluation
-- `--strict-conditions` (bool): Error on unknown vars; case-sensitive string comparisons
-- `--require-all-yaml` (bool): Require all YAML-required variables even if not referenced
+### Conditional Evaluation Options (v1.1.0+)
+
+As of v1.1.0, ValidateCommand supports conditional sections via the following options:
+
+#### --conditions-trace-out
+
+**Purpose:** Write a JSON trace of conditional evaluation decisions to a file for debugging.
+
+**Usage:**
+```bash
+mdtool validate template.md --args args.json --conditions-trace-out trace.json
+```
+
+**Trace Output Format:**
+```json
+{
+  "blocks": [
+    {
+      "startLine": 12,
+      "endLine": 26,
+      "branches": [
+        { "kind": "if", "expr": "ROLE == 'TEST'", "taken": false },
+        { "kind": "else-if", "expr": "ROLE.Contains('REPORT')", "taken": true },
+        { "kind": "else", "taken": false }
+      ]
+    }
+  ]
+}
+```
+
+**Behavior:**
+- Trace is written to the specified file path
+- Validation output (JSON) remains on stdout
+- Trace includes all conditional blocks with their evaluation results
+- Useful for debugging complex conditional logic
+
+#### --no-conditions
+
+**Purpose:** Disable conditional evaluation; treat all conditional tags as literal text.
+
+**Usage:**
+```bash
+mdtool validate template.md --args args.json --no-conditions
+```
+
+**Behavior:**
+- All `{{#if}}`, `{{else if}}`, `{{else}}`, `{{/if}}` tags are ignored
+- Content validation operates on the full template (no pruning)
+- All variables in the template are required (unless optional with defaults)
+- Useful for validating that args work with or without conditionals
+
+**Backward Compatibility:**
+- This flag ensures templates work with older versions that don't support conditionals
+- Validates that non-conditional templates don't break
+
+#### --strict-conditions
+
+**Purpose:** Enable strict conditional evaluation mode.
+
+**Usage:**
+```bash
+mdtool validate template.md --args args.json --strict-conditions
+```
+
+**Behavior Changes:**
+1. **Unknown Variables:** Cause `ProcessingError` instead of evaluating to `false`
+2. **String Comparisons:** Case-sensitive instead of case-insensitive
+   - Default: `"TEST" == "test"` → true
+   - Strict: `"TEST" == "test"` → false
+
+**Use Cases:**
+- Catching typos in variable names
+- Enforcing exact string matching
+- Preventing silent failures from undefined variables
+
+**Example Error:**
+```json
+{
+  "success": false,
+  "errors": [
+    {
+      "type": "ProcessingError",
+      "description": "Unknown variable 'TYPO_ROLE' in expression",
+      "line": 15,
+      "context": "TYPO_ROLE == 'TEST'"
+    }
+  ]
+}
+```
+
+#### --require-all-yaml
+
+**Purpose:** Require all YAML-declared required variables, regardless of which content is effective.
+
+**Usage:**
+```bash
+mdtool validate template.md --args args.json --require-all-yaml
+```
+
+**Default Behavior (Content-Scoped):**
+- Only variables referenced in **effective content** (after conditional evaluation) are required
+- If a variable is only referenced in excluded branches, it's not required
+
+**With --require-all-yaml:**
+- All variables marked as `required: true` in YAML frontmatter must be provided
+- Regardless of whether they appear in effective content or not
+
+**Comparison:**
+
+**Template:**
+```yaml
+---
+variables:
+  ROLE:
+    description: "Agent role"
+    required: true
+  TEST_VAR:
+    description: "Test-specific variable"
+    required: true
+  REPORT_VAR:
+    description: "Report-specific variable"
+    required: true
+---
+
+{{#if ROLE == 'TEST'}}
+Use {{TEST_VAR}}
+{{else if ROLE == 'REPORT'}}
+Use {{REPORT_VAR}}
+{{/if}}
+```
+
+**Args (ROLE=TEST):**
+```json
+{
+  "role": "TEST",
+  "testVar": "value"
+}
+```
+
+**Default validation:**
+- Required: ROLE, TEST_VAR
+- Not required: REPORT_VAR (not in effective content)
+- Result: Success
+
+**With --require-all-yaml:**
+- Required: ROLE, TEST_VAR, REPORT_VAR (all marked required in YAML)
+- Result: Failure (REPORT_VAR missing)
 
 ### Processing Flow
 
@@ -342,17 +488,62 @@ mdtool process <file> --args <path> [--output <path>] [--force]
 
 ### Options
 
-|| Option            | Type    | Required | Description                              |
-||-------------------|---------|----------|------------------------------------------|
-|| `--args <path>`   | string  | Yes      | Path to JSON arguments file              |
-|| `--output <path>` | string  | No       | Output file path (default: stdout)       |
-|| `--force`         | flag    | No       | Overwrite existing output file           |
+| Option            | Type    | Required | Description                              |
+|-------------------|---------|----------|------------------------------------------|
+| `--args <path>`   | string  | Yes      | Path to JSON arguments file              |
+| `--output <path>` | string  | No       | Output file path (default: stdout)       |
+| `--force`         | flag    | No       | Overwrite existing output file           |
+| `--conditions-trace-out <path>` | string | No | Write JSON trace of conditional decisions |
+| `--no-conditions` | flag | No | Skip conditional evaluation (tags remain as literals) |
+| `--strict-conditions` | flag | No | Unknown variables in expressions cause errors; case-sensitive string comparisons |
 
-Additional options (conditionals):
-- `--conditions-trace-out <path>`: write JSON trace file of conditional decisions
-- `--no-conditions` (bool): Skip conditional evaluation (tags remain in content)
-- `--strict-conditions` (bool): Error on unknown variables; case-sensitive string comparisons
-- `--require-all-yaml` (bool): Require all YAML-required variables during pre-validation
+### Conditional Evaluation Options (v1.1.0+)
+
+As of v1.1.0, ProcessCommand supports conditional sections via the following options. These options work identically to ValidateCommand options (see ValidateCommand documentation for detailed examples).
+
+#### --conditions-trace-out
+
+**Purpose:** Write a JSON trace of conditional evaluation decisions to a file for debugging.
+
+**Usage:**
+```bash
+mdtool process template.md --args args.json --conditions-trace-out trace.json
+```
+
+**Behavior:**
+- Trace is written to the specified file path
+- Processed markdown output remains on stdout
+- Trace includes all conditional blocks with their evaluation results
+
+#### --no-conditions
+
+**Purpose:** Disable conditional evaluation; treat all conditional tags as literal text.
+
+**Usage:**
+```bash
+mdtool process template.md --args args.json --no-conditions
+```
+
+**Behavior:**
+- All `{{#if}}`, `{{else if}}`, `{{else}}`, `{{/if}}` tags are left in the output as-is
+- No conditional pruning occurs
+- Variable substitution operates on the full template
+- Useful for generating output that will be processed by another system
+
+#### --strict-conditions
+
+**Purpose:** Enable strict conditional evaluation mode.
+
+**Usage:**
+```bash
+mdtool process template.md --args args.json --strict-conditions
+```
+
+**Behavior Changes:**
+1. **Unknown Variables:** Cause `ProcessingError` instead of evaluating to `false`
+2. **String Comparisons:** Case-sensitive instead of case-insensitive
+
+**Note:** Unlike ValidateCommand, ProcessCommand does not have a `--require-all-yaml` option. This is because ProcessCommand validates based on effective content only (content-scoped validation) before performing substitution.
 
 ### Processing Flow
 
@@ -364,12 +555,14 @@ Additional options (conditionals):
 
 2. Evaluate conditionals (unless --no-conditions)
    ├── Evaluate {{#if}} / {{else if}} / {{else}} / {{/if}} blocks
+   ├── Prune excluded branches based on expression results
+   ├── Write trace to --conditions-trace-out file (if specified)
    └── Produce effective content
 
-3. Validate
+3. Validate (content-scoped)
    ├── Extract variables from effective content
-   ├── Default: require only variables referenced in effective content
-   ├── If --require-all-yaml: require all YAML-required variables
+   ├── Require only variables referenced in effective content
+   ├── Optional variables use YAML defaults if not provided
    └── Exit with error if validation fails
 
 4. Perform variable substitution on effective content
@@ -386,6 +579,12 @@ Additional options (conditionals):
    ├── Write to stdout (default) or --output file (UTF-8, no BOM)
    └── Exit code 0 on success
 ```
+
+**Key Points:**
+- Conditionals are evaluated **before** variable extraction
+- Only variables in effective content (kept branches) are required
+- Trace output (if enabled) is written to a separate file, not stdout
+- `--no-conditions` skips step 2 entirely
 
 ### File Overwrite Protection Logic
 

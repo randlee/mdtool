@@ -8,7 +8,7 @@
 
 ## Sprint 1 Progress Summary
 
-**Current Status:** Waves 1 & 2 Complete, Wave 3 Ready to Begin
+**Current Status:** Phase 1 Complete (MVP)
 
 | Wave | Component | Status | Tests | Coverage | QA |
 |------|-----------|--------|-------|----------|-----|
@@ -16,12 +16,75 @@
 | Wave 2A | Utilities | ✅ COMPLETE | 62/62 | >80% | PASS |
 | Wave 2B | Core | ✅ COMPLETE | 84/84 | >80% | PASS |
 | Wave 2 | Integration | ✅ COMPLETE | 14/14 | N/A | PASS |
-| Wave 3 | Commands | 🔄 NEXT | 0 | N/A | PENDING |
-| Wave 4 | Integration & Docs | ⏸️ BLOCKED | 0 | N/A | PENDING |
 
 **Total Tests Passing:** 317/317 (100%)
 **Build Status:** Zero warnings, zero errors
-**Ready for:** Wave 3 Commands implementation
+
+---
+
+## Phase 2 Progress Summary (Conditional Sections v1.1.0)
+
+**Current Status:** Waves 1 & 2 Complete (Core + CLI), Wave 3 Complete (Documentation & Examples)
+
+| Wave | Component | Status | Tests | Coverage | QA |
+|------|-----------|--------|-------|----------|-----|
+| Wave 1 | Core Logic | ✅ COMPLETE | 36/36 | >80% | PASS |
+| Wave 2 | CLI Integration | ✅ COMPLETE | 21/21 | >80% | PASS |
+| Wave 3 | Documentation & Examples | ✅ COMPLETE | 5/5 | N/A | PASS |
+
+**Total Tests (Phase 2):** 62/62 (100%)
+**Total Tests (All):** 409/409 + 5 = 414/414 (100%)
+**Build Status:** Zero warnings, zero errors
+**Documentation:** Complete (Core.md, Commands.md, README.md)
+**Examples:** Complete (conditionals.md, conditionals-test.json, conditionals-report.json)
+
+### Wave 3 Deliverables (Documentation & Examples)
+
+- [✅] Updated docs/design/Core.md with ConditionalEvaluator section
+  - [✅] Overview and processing order
+  - [✅] IArgsAccessor abstraction
+  - [✅] Tag syntax and expression operators
+  - [✅] Built-in functions (contains, startsWith, endsWith, in, exists)
+  - [✅] Type awareness and case modes
+  - [✅] Error handling
+  - [✅] Code fence protection notes
+- [✅] Updated docs/design/Commands.md with conditional options
+  - [✅] ProcessCommand conditional options (6 flags)
+  - [✅] ValidateCommand conditional options (7 flags)
+  - [✅] Processing flow with conditionals
+  - [✅] Content-scoped vs all-YAML validation modes
+  - [✅] Trace output functionality
+  - [✅] Backward compatibility notes
+- [✅] Updated README.md with Conditional Sections feature guide
+  - [✅] Feature overview and key features
+  - [✅] Syntax examples (if, else if, else, nested)
+  - [✅] Expression operators table
+  - [✅] Functions documentation with examples
+  - [✅] CLI options for both commands
+  - [✅] Validation modes explanation
+  - [✅] Debugging with trace output
+  - [✅] Code fence protection warning
+  - [✅] Complete example: role-based templates (TEST vs REPORT)
+  - [✅] Updated roadmap showing Phase 2 complete
+- [✅] Created examples/conditionals.md
+  - [✅] YAML frontmatter with ROLE, AGENT, DEBUG, ENVIRONMENT
+  - [✅] Shared setup blocks
+  - [✅] Role-specific content (TEST and REPORT)
+  - [✅] Debug information blocks
+  - [✅] Environment-specific blocks (DEV vs PROD)
+  - [✅] Nested conditionals
+  - [✅] Inline comments explaining sections
+- [✅] Created examples/conditionals-test.json (TEST role args)
+- [✅] Created examples/conditionals-report.json (REPORT role args)
+- [✅] Created tests/MDTool.Tests/Examples/ConditionalExamplesTests.cs
+  - [✅] Test_ExampleConditionals_TestRole_ProcessesCorrectly
+  - [✅] Test_ExampleConditionals_ReportRole_ProcessesCorrectly
+  - [✅] Test_ExampleConditionals_TestRole_ValidatesCorrectly
+  - [✅] Test_ExampleConditionals_ReportRole_ValidatesCorrectly
+  - [✅] Test_ExampleConditionals_AllExamplesExecuteWithoutErrors
+- [✅] Updated docs/master-checklist.md with Wave 3 progress
+
+**Phase 2 Status:** ✅ COMPLETE - Ready for release as v1.1.0
 
 ---
 

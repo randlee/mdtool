@@ -697,7 +697,20 @@ variables = {
 
 ### Responsibility
 
-Evaluate conditional blocks and prune content based on boolean expressions over args.
+Evaluate conditional blocks (`{{#if}}`, `{{else if}}`, `{{else}}`, `{{/if}}`) in markdown content and prune sections based on boolean expressions evaluated against provided arguments. This enables a single template to target multiple roles or scenarios (e.g., QA agent roles like TEST vs REPORT).
+
+### Overview
+
+The ConditionalEvaluator processes markdown content in the following order:
+
+1. **Load args and defaults**: Merge JSON arguments with YAML defaults
+2. **Evaluate conditionals**: Process `{{#if}}` blocks to produce "effective content"
+3. **Variable extraction/substitution**: Operate only on effective content
+
+This ensures that:
+- Only variables referenced in effective content are required
+- Content is deterministic and side-effect-free
+- Nested conditionals are supported up to MaxNesting depth
 
 ### Public Interface
 
@@ -731,6 +744,8 @@ public interface IArgsAccessor
 public sealed class ArgsJsonAccessor : IArgsAccessor
 {
     // Wraps JsonDocument/JsonElement and supports case-insensitive, dot-path lookups
+    public ArgsJsonAccessor(JsonDocument document);
+    public bool TryGet(string path, out object? value);
 }
 
 public sealed class ConditionalTrace
@@ -751,32 +766,352 @@ public sealed class ConditionalBranchTrace
     public string? Expr { get; init; }
     public bool Taken { get; init; }
 }
-{
-    public ProcessingResult<string> Evaluate(
-        string content,
-        IArgsAccessor args,
-        ConditionalOptions options);
-}
-
-public record ConditionalOptions(
-    bool Strict = false,
-    bool CaseSensitiveStrings = false,
-    int MaxNesting = 10
-);
 ```
+
+### IArgsAccessor Abstraction
+
+The `IArgsAccessor` interface provides a clean abstraction for variable lookups:
+
+**Purpose:**
+- Case-insensitive key lookups (ROLE, role, Role are equivalent)
+- Dot-path navigation for nested values (`USER.NAME`)
+- Decouples conditional evaluation from JSON implementation
+
+**Implementation:**
+```csharp
+public interface IArgsAccessor
+{
+    bool TryGet(string path, out object? value);
+}
+```
+
+**ArgsJsonAccessor:**
+- Wraps `JsonDocument` for JSON-backed arguments
+- Supports case-insensitive property matching
+- Handles dot notation for nested objects
+- Returns typed values (string, number, boolean)
 
 ### Tag Syntax
 
-- `{{#if EXPR}}`, `{{else if EXPR}}`, `{{else}}`, `{{/if}}`
-- Balanced/nested, MaxNesting=10
-- Errors: InvalidVariableFormat (mismatch), ProcessingError (bad expression), RecursionDepthExceeded
+Conditional blocks use the following syntax:
 
-### Evaluation Rules
+```markdown
+{{#if EXPR}}
+  ... content when EXPR is true ...
+{{else if EXPR2}}
+  ... content when EXPR2 is true ...
+{{else}}
+  ... content when none of the above are true ...
+{{/if}}
+```
 
-- Unknown vars → false (or error in Strict)
-- String comparisons case-insensitive by default; enable CaseSensitiveStrings to force case-sensitive
-- Supported operators: `!`, `&&`, `||`, `==`, `!=`, `(`, `)`
-- Functions: contains, startsWith, endsWith, in, exists
+**Rules:**
+- Tags must be balanced and properly nested
+- Maximum nesting depth: 10 (configurable via `MaxNesting`)
+- Whitespace inside tags is ignored: `{{#if   EXPR}}` is valid
+- Tags may span multiple lines; content preserves original formatting
+- Multiple `{{else if}}` branches are supported
+- `{{else}}` is optional
+
+**Errors:**
+- Mismatched or improperly nested tags → `InvalidVariableFormat` (with line number)
+- Expression parse/evaluation failure → `ProcessingError` (with description and line)
+- Nesting beyond limit → `RecursionDepthExceeded`
+
+### Expression Syntax and Operators
+
+**Supported Operators:**
+
+| Operator | Type | Precedence | Description |
+|----------|------|------------|-------------|
+| `!` | Unary | Highest | Logical NOT |
+| `&&` | Binary | Medium | Logical AND |
+| `\|\|` | Binary | Lowest | Logical OR |
+| `==` | Binary | Medium | Equality (type-aware) |
+| `!=` | Binary | Medium | Inequality (type-aware) |
+| `()` | Grouping | Highest | Parentheses for precedence |
+
+**Literal Values:**
+- **Strings**: Single or double quotes: `'TEST'`, `"QA"`
+- **Numbers**: Integer or decimal: `123`, `45.67`
+- **Booleans**: `true`, `false`
+
+**Variable References:**
+- Variables are referenced by name: `ROLE`, `AGENT.NAME`
+- Case-insensitive lookup: `ROLE`, `role`, `Role` are equivalent
+- Dot notation supported for nested values
+
+**Examples:**
+```
+ROLE == 'TEST'
+ROLE == 'TEST' || ROLE == 'REPORT'
+ROLE == 'TEST' && !DEBUG
+in(ROLE, ['TEST', 'REPORT']) && ENVIRONMENT == 'DEV'
+(ROLE == 'TEST' || ROLE == 'REPORT') && exists(AGENT)
+```
+
+### Functions
+
+The ConditionalEvaluator supports the following built-in functions:
+
+#### contains(haystack, needle)
+
+Tests if a string contains a substring.
+
+**Aliases:** `haystack.Contains(needle)` (method-style)
+
+**Parameters:**
+- `haystack` - String to search in
+- `needle` - Substring to search for
+
+**Returns:** Boolean
+
+**Case Behavior:**
+- Default: Case-insensitive
+- With `CaseSensitiveStrings`: Case-sensitive
+
+**Examples:**
+```
+ROLE.Contains('TEST')
+contains(AGENT, 'QA')
+```
+
+#### startsWith(text, prefix)
+
+Tests if a string starts with a prefix.
+
+**Aliases:** `text.StartsWith(prefix)` (method-style)
+
+**Parameters:**
+- `text` - String to test
+- `prefix` - Prefix to check
+
+**Returns:** Boolean
+
+**Case Behavior:**
+- Default: Case-insensitive
+- With `CaseSensitiveStrings`: Case-sensitive
+
+**Examples:**
+```
+AGENT.StartsWith('QA')
+startsWith(ROLE, 'TEST')
+```
+
+#### endsWith(text, suffix)
+
+Tests if a string ends with a suffix.
+
+**Aliases:** `text.EndsWith(suffix)` (method-style)
+
+**Parameters:**
+- `text` - String to test
+- `suffix` - Suffix to check
+
+**Returns:** Boolean
+
+**Case Behavior:**
+- Default: Case-insensitive
+- With `CaseSensitiveStrings`: Case-sensitive
+
+**Examples:**
+```
+AGENT.EndsWith('1')
+endsWith(ENVIRONMENT, 'PROD')
+```
+
+#### in(value, array)
+
+Tests if a value is in an array of values.
+
+**Parameters:**
+- `value` - Value to search for
+- `array` - Array literal: `['a', 'b', 'c']`
+
+**Returns:** Boolean
+
+**Type Behavior:**
+- Array elements can be strings, numbers, or booleans
+- Comparisons are type-safe (string != number)
+- Strings compared per current case mode
+
+**Examples:**
+```
+in(ROLE, ['TEST', 'REPORT'])
+in(PORT, [8080, 3000, 5000])
+in(DEBUG, [true])
+```
+
+#### exists(VAR)
+
+Tests if a variable is present in the arguments (after merging defaults).
+
+**Parameters:**
+- `VAR` - Variable name (unquoted)
+
+**Returns:** Boolean
+
+**Behavior:**
+- Returns `true` if variable is present (even if value is null/empty)
+- Returns `false` if variable is not in args or defaults
+
+**Examples:**
+```
+exists(AGENT)
+exists(DEBUG)
+!exists(OPTIONAL_VAR)
+```
+
+### Type Awareness and Case Modes
+
+**Type Semantics:**
+- MarkdownParser preserves YAML default value types (int, double, bool, string)
+- Args JSON is parsed with native types
+- Expression evaluation is type-aware; no implicit string<->number coercion
+- Mismatched type comparisons evaluate to `false` (or error in Strict mode)
+
+**Supported Value Types:**
+- `string`
+- `number` (int or double)
+- `boolean`
+
+**Case Behavior:**
+
+| Context | Default | With `--strict-conditions` |
+|---------|---------|----------------------------|
+| Variable lookup | Case-insensitive | Case-insensitive |
+| String comparisons | Case-insensitive | Case-sensitive |
+| Function arguments | Case-insensitive | Case-sensitive |
+
+**Variable Lookup:**
+- Keys are always case-insensitive: `ROLE`, `role`, `Role` equivalent
+
+**String Comparisons:**
+- Default mode: `"TEST" == "test"` → true
+- Strict mode (`CaseSensitiveStrings`): `"TEST" == "test"` → false
+
+**Type Examples:**
+```
+ROLE == 'TEST'          // String equality
+PORT == 8080            // Number equality
+DEBUG == true           // Boolean equality
+PORT == '8080'          // false (number != string)
+```
+
+### Unknown Variables in Expressions
+
+**Default Behavior:**
+- Unknown variables evaluate to `false`
+- No error is raised
+- Allows optional variables in conditionals
+
+**Strict Mode (`--strict-conditions`):**
+- Unknown variables cause `ProcessingError`
+- Error includes variable name and context
+- Forces explicit declaration of all variables used in expressions
+
+**Examples:**
+
+Default mode:
+```
+{{#if OPTIONAL_VAR == 'value'}}
+  This won't show if OPTIONAL_VAR is undefined
+{{/if}}
+```
+
+Strict mode:
+```
+{{#if OPTIONAL_VAR == 'value'}}
+  ERROR: Unknown variable 'OPTIONAL_VAR'
+{{/if}}
+```
+
+**Best Practice:**
+Use `exists(VAR)` to explicitly check for presence:
+```
+{{#if exists(OPTIONAL_VAR) && OPTIONAL_VAR == 'value'}}
+  This is safe in both modes
+{{/if}}
+```
+
+### Evaluation Algorithm
+
+**High-Level Flow:**
+
+1. **Tokenize**: Find all `{{#if}}`, `{{else if}}`, `{{else}}`, `{{/if}}` tags
+2. **Build Block Stack**: Track nesting level, enforce MaxNesting
+3. **Verify Structure**: Ensure balanced tags
+4. **Evaluate Blocks**: For each block:
+   - Parse expressions left-to-right
+   - Evaluate expressions until a true branch is found
+   - Keep content from true branch, drop others
+5. **Return**: Concatenation of kept content segments
+
+**Expression Engine:**
+- Shunting-yard or Pratt parser for precedence and parentheses
+- Operators and functions per spec
+- Values resolve via `IArgsAccessor`
+
+**Precedence Rules:**
+1. `()` - Parentheses (highest)
+2. `!` - Unary NOT
+3. `==`, `!=` - Equality
+4. `&&` - Logical AND
+5. `||` - Logical OR (lowest)
+
+### Error Handling
+
+**Error Types:**
+
+| Error Type | Trigger | Example |
+|------------|---------|---------|
+| `InvalidVariableFormat` | Mismatched tags | `{{#if}}` without `{{/if}}` |
+| `ProcessingError` | Bad expression | `{{#if ROLE =}}` (invalid syntax) |
+| `RecursionDepthExceeded` | Nesting > MaxNesting | 11 levels of nested `{{#if}}` |
+| `ProcessingError` | Unknown variable (strict) | `{{#if UNDEFINED == 'x'}}` |
+
+**Error Context:**
+- All errors include line numbers
+- Expression errors include the expression text
+- Tag mismatch errors show the offending tag
+
+**JsonOutput Format:**
+```json
+{
+  "success": false,
+  "errors": [
+    {
+      "type": "ProcessingError",
+      "description": "Expression parsing failed: unexpected token '='",
+      "line": 12,
+      "context": "ROLE ="
+    }
+  ]
+}
+```
+
+### Code Fence Protection
+
+**Important:** Conditional tags inside code fences are **still parsed**. MDTool does not perform language-sensitive parsing.
+
+**Example:**
+```markdown
+{{#if ROLE == 'TEST'}}
+This shows for TEST role.
+
+```bash
+echo "{{VARIABLE}}"
+```
+{{/if}}
+```
+
+**Behavior:**
+- The outer `{{#if}}` is evaluated
+- The inner `{{VARIABLE}}` is treated as a variable placeholder
+- Code fences do not create "literal zones"
+
+**Workaround:**
+If you need literal `{{` in code, use HTML entities or escape sequences (future enhancement).
 
 ---
 
@@ -1165,13 +1500,11 @@ This allows users to fix all issues in one iteration.
 
 ---
 
-### Processing Pipeline
+## Processing Pipeline
 
-Update: conditionals are evaluated after args+defaults and before extraction/substitution.
+The Core classes form a processing pipeline for markdown transformation. As of v1.1.0, conditional sections are evaluated after args+defaults are merged and before variable extraction/substitution.
 
 ### How Core Classes Work Together
-
-The Core classes form a processing pipeline for markdown transformation:
 
 ```
 ┌─────────────────────┐
@@ -1195,16 +1528,29 @@ The Core classes form a processing pipeline for markdown transformation:
            ├─────────────────┐
            │                 │
            ▼                 ▼
-    ┌──────────────┐  ┌─────────────┐
-    │ Schema       │  │ Variable    │
-    │ Generator    │  │ Extractor   │
-    └──────┬───────┘  └──────┬──────┘
-           │                 │
-           ▼                 ▼
-    ┌──────────────┐  ┌─────────────┐
-    │ JSON Schema  │  │ Variables   │
-    │ (template)   │  │ Found       │
-    └──────────────┘  └──────┬──────┘
+    ┌──────────────┐  ┌─────────────────────┐
+    │ Schema       │  │ 1. Load Args+Defaults│
+    │ Generator    │  │ 2. Conditional Eval  │
+    └──────┬───────┘  │    (optional)        │
+           │          └──────┬──────────────┘
+           ▼                 │
+    ┌──────────────┐         ▼
+    │ JSON Schema  │  ┌─────────────────┐
+    │ (template)   │  │ Effective       │
+    └──────────────┘  │ Content         │
+                      └──────┬──────────┘
+                             │
+                             ▼
+                      ┌──────────────┐
+                      │ Variable     │
+                      │ Extractor    │
+                      └──────┬───────┘
+                             │
+                             ▼
+                      ┌──────────────┐
+                      │ Variables    │
+                      │ Found        │
+                      └──────┬───────┘
                              │
                              ▼
                       ┌──────────────┐

@@ -1,0 +1,6 @@
+{
+  "role": "REPORT",
+  "agent": "qa-report-1",
+  "debug": false,
+  "environment": "PROD"
+}
