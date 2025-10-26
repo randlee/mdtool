@@ -266,7 +266,8 @@ public class MarkdownParser
             var required = dict.ContainsKey("required")
                 ? Convert.ToBoolean(dict["required"])
                 : true;
-            var defaultValue = dict.ContainsKey("default") ? dict["default"] : null;
+            var rawDefault = dict.ContainsKey("default") ? dict["default"] : null;
+            var defaultValue = PreserveDefaultValueType(rawDefault);
 
             // Validate: optional variables must have defaults
             if (!required && defaultValue == null)
@@ -282,5 +283,51 @@ public class MarkdownParser
         return (null, ValidationError.InvalidYaml(
             $"Variable '{name}' must be either a string (for required variables) or an object with 'description' field"
         ));
+    }
+
+    /// <summary>
+    /// Preserves type information for default values from YAML.
+    /// Converts string representations of numbers/booleans back to their native types.
+    /// </summary>
+    private static object? PreserveDefaultValueType(object? value)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        // If already a proper type, return as-is
+        if (value is int or long or double or float or decimal or bool)
+        {
+            return value;
+        }
+
+        // If it's a string, try to parse as number or bool
+        if (value is string s)
+        {
+            // Try int
+            if (int.TryParse(s, out var intVal))
+            {
+                return intVal;
+            }
+
+            // Try double
+            if (double.TryParse(s, out var doubleVal))
+            {
+                return doubleVal;
+            }
+
+            // Try bool
+            if (bool.TryParse(s, out var boolVal))
+            {
+                return boolVal;
+            }
+
+            // Return as string if no conversion worked
+            return s;
+        }
+
+        // Return as-is for other types
+        return value;
     }
 }

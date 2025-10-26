@@ -5,6 +5,11 @@ on:
     branches: [ main, develop ]
     types: [opened, synchronize, reopened]
 
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
 jobs:
   test:
     name: Run Unit Tests
@@ -26,6 +31,8 @@ jobs:
       run: dotnet build --configuration Release --no-restore
 
     - name: Run all unit tests
+      env:
+        CONFIGURATION: Release
       run: dotnet test --configuration Release --no-build --verbosity normal --logger "console;verbosity=detailed"
 
     - name: Test Summary

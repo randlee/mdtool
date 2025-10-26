@@ -191,9 +191,15 @@ mdtool validate <file> --args <path>
 
 ### Options
 
-| Option          | Type   | Required | Description                     |
-|-----------------|--------|----------|---------------------------------|
-| `--args <path>` | string | Yes      | Path to JSON arguments file     |
+|| Option          | Type   | Required | Description                     |
+||-----------------|--------|----------|---------------------------------|
+|| `--args <path>` | string | Yes      | Path to JSON arguments file     |
+
+Additional options (conditionals):
+- `--conditions-trace-out <path>`: write JSON trace file of conditional decisions
+- `--no-conditions` (bool): Skip conditional evaluation
+- `--strict-conditions` (bool): Error on unknown vars; case-sensitive string comparisons
+- `--require-all-yaml` (bool): Require all YAML-required variables even if not referenced
 
 ### Processing Flow
 
@@ -208,13 +214,19 @@ mdtool validate <file> --args <path>
    ├── Parse JSON (case-insensitive keys)
    └── Handle invalid JSON errors
 
-3. Validate arguments
-   ├── Check all required variables present
-   ├── Check optional variables (use defaults if missing)
-   ├── Navigate nested objects via dot notation
+3. Evaluate conditionals (unless --no-conditions)
+   ├── Merge args with defaults
+   └── Produce effective content (prune excluded branches)
+
+4. Extract variables from effective content
+   └── Use VariableExtractor on effective content
+
+5. Validate arguments
+   ├── Default: require only variables referenced in effective content
+   ├── If --require-all-yaml: require all YAML-required variables
    └── Collect all validation errors (don't fail on first)
 
-4. Output validation result
+6. Output validation result
    ├── Return structured JSON with success/failure
    ├── Include lists of provided and missing variables
    └── Include detailed error information
@@ -330,38 +342,49 @@ mdtool process <file> --args <path> [--output <path>] [--force]
 
 ### Options
 
-| Option            | Type    | Required | Description                              |
-|-------------------|---------|----------|------------------------------------------|
-| `--args <path>`   | string  | Yes      | Path to JSON arguments file              |
-| `--output <path>` | string  | No       | Output file path (default: stdout)       |
-| `--force`         | flag    | No       | Overwrite existing output file           |
+|| Option            | Type    | Required | Description                              |
+||-------------------|---------|----------|------------------------------------------|
+|| `--args <path>`   | string  | Yes      | Path to JSON arguments file              |
+|| `--output <path>` | string  | No       | Output file path (default: stdout)       |
+|| `--force`         | flag    | No       | Overwrite existing output file           |
+
+Additional options (conditionals):
+- `--conditions-trace-out <path>`: write JSON trace file of conditional decisions
+- `--no-conditions` (bool): Skip conditional evaluation (tags remain in content)
+- `--strict-conditions` (bool): Error on unknown variables; case-sensitive string comparisons
+- `--require-all-yaml` (bool): Require all YAML-required variables during pre-validation
 
 ### Processing Flow
 
 ```
-1. Validate arguments
-   ├── Parse markdown file
-   ├── Load JSON arguments
-   ├── Validate all required variables present
+1. Parse markdown and load args
+   ├── Parse YAML frontmatter and content
+   ├── Load JSON arguments (case-insensitive)
+   └── Merge YAML defaults
+
+2. Evaluate conditionals (unless --no-conditions)
+   ├── Evaluate {{#if}} / {{else if}} / {{else}} / {{/if}} blocks
+   └── Produce effective content
+
+3. Validate
+   ├── Extract variables from effective content
+   ├── Default: require only variables referenced in effective content
+   ├── If --require-all-yaml: require all YAML-required variables
    └── Exit with error if validation fails
 
-2. Perform variable substitution
-   ├── Find all {{VARIABLE}} patterns in content
-   ├── Replace with values from JSON args (case-insensitive)
+4. Perform variable substitution on effective content
+   ├── Replace {{VARIABLE}} with values from JSON args (case-insensitive)
    ├── Navigate nested objects via dot notation
-   ├── Use default values for missing optional variables
+   ├── Use defaults for missing optional variables
    └── Return substituted content
 
-3. Check file overwrite protection
-   ├── If --output specified and file exists
-   ├── Check if --force flag is set
-   ├── Error if --force not set: "File exists, use --force to overwrite"
-   └── Continue if --force set or file doesn't exist
+5. Check file overwrite protection (if --output specified)
+   ├── If file exists and not --force → error
+   └── Else continue
 
-4. Output processed markdown
-   ├── Write to stdout (default) or --output file
-   ├── Use UTF-8 encoding without BOM
-   └── Return exit code 0
+6. Output processed markdown
+   ├── Write to stdout (default) or --output file (UTF-8, no BOM)
+   └── Exit code 0 on success
 ```
 
 ### File Overwrite Protection Logic
