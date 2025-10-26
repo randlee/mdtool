@@ -693,6 +693,45 @@ variables = {
 
 ---
 
+## ConditionalEvaluator Class
+
+### Responsibility
+
+Evaluate conditional blocks and prune content based on boolean expressions over args.
+
+### Public Interface
+
+```csharp
+public class ConditionalEvaluator
+{
+    public ProcessingResult<string> Evaluate(
+        string content,
+        IArgsAccessor args,
+        ConditionalOptions options);
+}
+
+public record ConditionalOptions(
+    bool Strict = false,
+    bool CaseSensitiveStrings = false,
+    int MaxNesting = 10
+);
+```
+
+### Tag Syntax
+
+- `{{#if EXPR}}`, `{{else if EXPR}}`, `{{else}}`, `{{/if}}`
+- Balanced/nested, MaxNesting=10
+- Errors: InvalidVariableFormat (mismatch), ProcessingError (bad expression), RecursionDepthExceeded
+
+### Evaluation Rules
+
+- Unknown vars → false (or error in Strict)
+- String comparisons case-insensitive by default; enable CaseSensitiveStrings to force case-sensitive
+- Supported operators: `!`, `&&`, `||`, `==`, `!=`, `(`, `)`
+- Functions: contains, startsWith, endsWith, in, exists
+
+---
+
 ## VariableSubstitutor Class
 
 ### Responsibility
@@ -1078,7 +1117,9 @@ This allows users to fix all issues in one iteration.
 
 ---
 
-## Processing Pipeline
+### Processing Pipeline
+
+Update: conditionals are evaluated after args+defaults and before extraction/substitution.
 
 ### How Core Classes Work Together
 

@@ -378,11 +378,30 @@ JSON:
 ```
 
 ### Conditional Logic
+
+Updated syntax and evaluation:
+
 ```markdown
-{{IF DEBUG}}
+{{#if DEBUG}}
 Debug mode enabled
-{{END}}
+{{/if}}
+
+{{#if ROLE == 'TEST' || ROLE == 'REPORT'}}
+Shared setup
+{{else if ROLE.Contains('REPORT') || AGENT.StartsWith('QA')}}
+Report-specific content
+{{else}}
+Other
+{{/if}}
 ```
+
+Processing order:
+1) Args + defaults → 2) Evaluate conditionals (prune content) → 3) Substitute variables
+
+Flags:
+- --no-conditions (skip evaluation)
+- --strict-conditions (unknown vars error; case-sensitive)
+- --require-all-yaml (Validate: require all YAML-required vars)
 
 ### Additional Built-in Functions
 - `{{UPPER:name}}` - Uppercase transformation
