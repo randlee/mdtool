@@ -1,0 +1,51 @@
+name: Publish to NuGet
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+
+jobs:
+  publish:
+    name: Build, Test, and Publish
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Run tests
+      run: dotnet test --configuration Release --no-build --verbosity normal
+
+    - name: Create NuGet package
+      run: dotnet pack src/MDTool/MDTool.csproj --configuration Release --no-build --output ./nupkg
+
+    - name: Display package info
+      run: |
+        echo "Package created:"
+        ls -lh ./nupkg/
+        echo "Package ID: Rand.MDTool"
+        echo "Version: $(grep -oP '(?<=<Version>)[^<]+' src/MDTool/MDTool.csproj)"
+
+    - name: Publish to NuGet
+      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+    - name: Upload package as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuget-package
+        path: ./nupkg/*.nupkg
+        retention-days: 90
