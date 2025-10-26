@@ -1,0 +1,10 @@
+{
+  "user": {
+    "name": "John Doe",
+    "email": "john@example.com",
+    "profile": {
+      "bio": "Software engineer and open source contributor",
+      "title": "Senior Software Engineer"
+    }
+  }
+}

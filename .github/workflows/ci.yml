@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        dotnet-version: ['8.0.x']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Run tests
+      run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}
+        path: '**/test-results.trx'
+
+  package:
+    name: Create Package
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Create package
+      run: dotnet pack src/MDTool/MDTool.csproj --configuration Release --no-build --output ./nupkg
+
+    - name: Upload package artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nuget-package
+        path: ./nupkg/*.nupkg
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: package
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Download package
+      uses: actions/download-artifact@v4
+      with:
+        name: nuget-package
+        path: ./nupkg
+
+    - name: Install tool locally
+      run: dotnet tool install --global --add-source ./nupkg MDTool
+
+    - name: Verify tool installation
+      run: mdtool --help
+
+    - name: Test get-schema command
+      run: |
+        cd examples
+        mdtool get-schema simple-template.md
+
+    - name: Test validate command
+      run: |
+        cd examples
+        mdtool validate simple-template.md --args simple-args.json
+
+    - name: Test process command
+      run: |
+        cd examples
+        mdtool process simple-template.md --args simple-args.json
+
+    - name: Test generate-header command
+      run: |
+        cd examples
+        mdtool generate-header no-frontmatter.md
+
+    - name: Uninstall tool
+      run: dotnet tool uninstall --global MDTool
