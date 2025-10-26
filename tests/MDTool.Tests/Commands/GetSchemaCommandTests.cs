@@ -61,7 +61,7 @@ public class GetSchemaCommandTests : IDisposable
         return path;
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite. Works when run individually.")]
+    [Fact]
     public async Task GetSchema_ValidMarkdown_ReturnsSchema()
     {
         // Arrange
@@ -88,8 +88,8 @@ variables:
         Assert.True(json.RootElement.TryGetProperty("name", out var nameElement));
         Assert.Equal("Application name", nameElement.GetString());
         Assert.True(json.RootElement.TryGetProperty("port", out var portElement));
-        // Port is returned as string from default value
-        Assert.Equal("8080", portElement.GetString());
+        // Port is returned as number from default value (type preserved)
+        Assert.Equal(8080, portElement.GetInt32());
     }
 
     [Fact]
@@ -118,7 +118,7 @@ variables:
         Assert.Equal("Test variable", testElement.GetString());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite. Works when run individually.")]
+    [Fact]
     public async Task GetSchema_FileNotFound_ReturnsError()
     {
         // Arrange
@@ -134,7 +134,7 @@ variables:
         Assert.True(json.RootElement.GetProperty("errors").GetArrayLength() > 0);
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite. Works when run individually.")]
+    [Fact]
     public async Task GetSchema_InvalidYaml_ReturnsError()
     {
         // Arrange
@@ -156,7 +156,7 @@ variables:
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite. Works when run individually.")]
+    [Fact]
     public async Task GetSchema_NestedVariables_GeneratesNestedSchema()
     {
         // Arrange

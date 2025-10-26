@@ -60,7 +60,7 @@ public class ProcessCommandTests : IDisposable
         return path;
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_ValidMarkdownAndArgs_ReturnsProcessedContent()
     {
         // Arrange
@@ -90,7 +90,7 @@ variables:
         Assert.Contains("# MyApp running on port 8080", output);
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_WithOutputFile_WritesToFile()
     {
         // Arrange
@@ -119,7 +119,7 @@ variables:
         Assert.Contains("# Hello World", content);
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_FileExistsWithoutForce_ReturnsError()
     {
         // Arrange
@@ -147,7 +147,7 @@ variables:
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_FileExistsWithForce_Overwrites()
     {
         // Arrange
@@ -175,7 +175,7 @@ variables:
         Assert.Contains("# Overwritten", content);
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_MissingRequiredVariable_ReturnsError()
     {
         // Arrange
@@ -203,7 +203,7 @@ variables:
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_NestedVariables_SubstitutesCorrectly()
     {
         // Arrange
@@ -235,7 +235,7 @@ Email: {{USER.EMAIL}}";
         Assert.Contains("john@example.com", output);
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Process_OptionalVariableWithDefault_UsesDefault()
     {
         // Arrange
