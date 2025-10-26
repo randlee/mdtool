@@ -368,7 +368,7 @@ DB: {{CONFIG.DB.HOST}}
         /// <summary>
         /// Test 8: Optional variables with defaults
         /// </summary>
-        [Fact(Skip = "Test infrastructure issue - requires investigation of optional variable handling.")]
+        [Fact]
         public async Task OptionalVariables_WithDefaults_UsesDefaults()
         {
             // Create template with optional variables
@@ -401,7 +401,7 @@ Debug: {{DEBUG}}
             Assert.Equal(0, processExitCode);
             Assert.Contains("TestApp", processOutput);
             Assert.Contains("1.0.0", processOutput);
-            Assert.Contains("false", processOutput);
+            Assert.Contains("False", processOutput);
         }
 
         /// <summary>

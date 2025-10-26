@@ -60,7 +60,7 @@ public class ValidateCommandTests : IDisposable
         return path;
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Validate_AllVariablesProvided_Succeeds()
     {
         // Arrange
@@ -91,7 +91,7 @@ variables:
         Assert.True(provided.GetArrayLength() >= 2);
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Validate_MissingRequiredVariable_Fails()
     {
         // Arrange
@@ -121,7 +121,7 @@ variables:
         Assert.Contains("PORT", missing.EnumerateArray().Select(e => e.GetString()).ToList());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Validate_OptionalVariableWithDefault_Succeeds()
     {
         // Arrange
@@ -152,7 +152,7 @@ variables:
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Validate_CaseInsensitiveMatching_Succeeds()
     {
         // Arrange
@@ -179,7 +179,7 @@ variables:
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Validate_NestedVariables_Succeeds()
     {
         // Arrange
@@ -210,7 +210,7 @@ variables:
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
+    [Fact]
     public async Task Validate_InvalidJsonArgs_ReturnsError()
     {
         // Arrange
