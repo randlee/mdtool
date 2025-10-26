@@ -15,14 +15,20 @@ public class ConditionalIntegrationTests
 
     public ConditionalIntegrationTests()
     {
+        // Detect current build configuration from the test assembly location
+        // Current directory will be like: tests/MDTool.Tests/bin/{Debug|Release}/net8.0
+        var currentDir = Directory.GetCurrentDirectory();
+        var configMatch = System.Text.RegularExpressions.Regex.Match(currentDir, @"[\\/]bin[\\/](Debug|Release)[\\/]");
+        var configuration = configMatch.Success ? configMatch.Groups[1].Value : "Debug";
+
         // Get the path to the compiled MDTool executable
         _mdtoolPath = Path.GetFullPath(Path.Combine(
-            Directory.GetCurrentDirectory(),
+            currentDir,
             "..", "..", "..", "..", "..",
-            "src", "MDTool", "bin", "Debug", "net8.0", "MDTool.dll"));
+            "src", "MDTool", "bin", configuration, "net8.0", "MDTool.dll"));
 
         _fixturesPath = Path.GetFullPath(Path.Combine(
-            Directory.GetCurrentDirectory(),
+            currentDir,
             "..", "..", "..", "fixtures", "conditionals"));
     }
 
