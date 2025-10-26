@@ -205,10 +205,14 @@ Welcome {{NAME}}!";
 
     private async Task<(int exitCode, string output, string error)> RunCommand(string args)
     {
+        // Use the built DLL directly instead of 'dotnet run' to avoid build output in stdout
+        var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? "Debug";
+        var dllPath = Path.Combine(_projectRoot, $"src/MDTool/bin/{configuration}/net8.0/MDTool.dll");
+
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --project \"{_mdtoolPath}\" -- {args}",
+            Arguments = $"\"{dllPath}\" {args}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
