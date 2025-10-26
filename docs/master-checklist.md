@@ -359,7 +359,7 @@
 ### Phase 1 Documentation
 - [ ] Create README.md
   - [ ] Project overview
-  - [ ] Installation instructions (`dotnet tool install -g MDTool`)
+  - [ ] Installation instructions (`dotnet tool install -g Rand.MDTool`)
   - [ ] Quick start guide
   - [ ] All four commands documented with examples
   - [ ] Variable naming conventions
@@ -390,9 +390,9 @@
   - [ ] Add icon (optional)
 - [ ] Test local installation
   - [ ] `dotnet pack -c Release`
-  - [ ] `dotnet tool install -g --add-source ./nupkg MDTool`
+  - [ ] `dotnet tool install -g --add-source ./nupkg Rand.MDTool`
   - [ ] Test all commands work globally
-  - [ ] `dotnet tool uninstall -g MDTool`
+  - [ ] `dotnet tool uninstall -g Rand.MDTool`
 - [ ] Prepare for distribution
   - [ ] Create GitHub repository
   - [ ] Add .gitignore

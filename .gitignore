@@ -420,3 +420,7 @@ FodyWeavers.xsd
 # macOS and local prompt
 .prompt
 .DS_Store
+
+# IDE directories
+.idea/
+.serena/

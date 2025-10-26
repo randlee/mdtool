@@ -536,10 +536,10 @@ Create `test-fixtures/` directory with:
 dotnet pack -c Release
 
 # Install globally
-dotnet tool install -g MDTool
+dotnet tool install -g Rand.MDTool
 
 # Uninstall
-dotnet tool uninstall -g MDTool
+dotnet tool uninstall -g Rand.MDTool
 ```
 
 ### Version Strategy

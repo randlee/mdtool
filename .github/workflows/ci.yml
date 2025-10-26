@@ -93,7 +93,7 @@ jobs:
         path: ./nupkg
 
     - name: Install tool locally
-      run: dotnet tool install --global --add-source ./nupkg MDTool
+      run: dotnet tool install --global --add-source ./nupkg Rand.MDTool
 
     - name: Verify tool installation
       run: mdtool --help
@@ -119,4 +119,4 @@ jobs:
         mdtool generate-header no-frontmatter.md
 
     - name: Uninstall tool
-      run: dotnet tool uninstall --global MDTool
+      run: dotnet tool uninstall --global Rand.MDTool

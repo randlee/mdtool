@@ -180,9 +180,26 @@ examples/
 └── no-frontmatter.md            # Document for header generation
 ```
 
+### 5. Conditional Sections
+
+**NEW in Phase 2!** MDTool now supports conditional sections. See [`CONDITIONALS-EXAMPLES.md`](./CONDITIONALS-EXAMPLES.md) for detailed examples including:
+
+- **QA Role Switching** (`conditionals.md`) - TEST vs REPORT mode
+- **Deployment Configuration** (`deployment-config.md`) - Environment-based settings
+- **Platform Installation** (`platform-install.md`) - Windows/Mac/Linux guides
+
+**Quick Start:**
+```bash
+# Enable conditionals with --enable-conditions flag
+mdtool process examples/deployment-config.md \
+  --args examples/deployment-config-prod.json \
+  --enable-conditions \
+  -o output.md
+```
+
 ## Next Steps
 
 - Read the main README.md for installation and full documentation
 - Try modifying these examples
 - Create your own templates
-- Explore advanced features in future releases (macros, conditionals, loops)
+- **NEW:** Explore conditional sections in `CONDITIONALS-EXAMPLES.md`
