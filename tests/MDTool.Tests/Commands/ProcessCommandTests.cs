@@ -20,8 +20,11 @@ public class ProcessCommandTests : IDisposable
         _testDirectory = Path.Combine(Path.GetTempPath(), $"mdtool-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testDirectory);
 
-        // Get project root directory (go up from test bin directory)
-        _projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        // Get project root directory
+        // On CI (GitHub Actions), use GITHUB_WORKSPACE if available
+        // Otherwise, go up from test bin directory
+        _projectRoot = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE")
+            ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
         _mdtoolPath = Path.Combine(_projectRoot, "src/MDTool/MDTool.csproj");
     }
 
