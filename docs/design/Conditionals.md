@@ -41,6 +41,12 @@ Block form with else-if and else:
 
 ## Expressions
 
+Type semantics and YAML defaults:
+- MarkdownParser preserves default value types (int, double, bool, string)
+- Args JSON is parsed with native types
+- Expression evaluation is type-aware; no implicit string<->number coercion
+- Mismatched type comparisons evaluate false (or error in Strict)
+
 Supported value types: string, number, boolean.
 
 Case behavior:
@@ -68,6 +74,11 @@ Literals:
 Unknown variables in expressions:
 - Default: evaluate as false (no error)
 - With `--strict-conditions`: error (ProcessingError with context)
+
+Return values of functions:
+- contains/startsWith/endsWith → bool (case per mode)
+- in(value, array) → bool; array elements can be strings/numbers/bools; compared type-safely
+- exists(VAR) → bool
 
 Examples:
 - `ROLE == 'TEST' || ROLE == 'REPORT'`
@@ -150,6 +161,9 @@ Expression engine:
 
 ## Commands Integration
 
+New option:
+- `--conditions-trace-out <path>`: write a JSON trace of conditional decisions for testing/debugging (stdout remains unchanged)
+
 ProcessCommand (add options):
 - `--no-conditions` (bool): Disable conditional evaluation
 - `--strict-conditions` (bool): Unknown variables in expressions are errors; strings case-sensitive
@@ -170,6 +184,23 @@ ValidateCommand (add options):
   - If `--require-all-yaml`: all YAML-required variables must be provided
 
 Help text updates to reflect options and semantics.
+
+Trace output schema (written when --conditions-trace-out is specified):
+```json
+{
+  "blocks": [
+    {
+      "startLine": 12,
+      "endLine": 26,
+      "branches": [
+        { "kind": "if", "expr": "ROLE == 'TEST'", "taken": false },
+        { "kind": "else-if", "expr": "ROLE.Contains('REPORT')", "taken": true },
+        { "kind": "else", "taken": false }
+      ]
+    }
+  ]
+}
+```
 
 ---
 
@@ -228,6 +259,27 @@ JsonOutput examples follow existing conventions.
 ---
 
 ## Testing Strategy
+
+Architecture/testability:
+- ConditionalEvaluator is a pure Core component (no System.CommandLine dependency)
+- Provide an ArgsJsonAccessor that adapts JsonDocument to IArgsAccessor (case-insensitive, dot-path)
+- Provide EvaluateDetailed(content, args, options) → (content, trace) for unit tests
+- CLI writes only content to stdout and trace (if any) to the file path; logs/errors go to stderr
+
+Unit:
+- Expression parsing precedence, functions, case modes
+- Tag nesting/mismatch detection
+- Strict vs non-strict unknown variable handling
+
+Integration:
+- End-to-end `validate` and `process` by invoking the built DLL via Process.Start()
+- Assertions rely on stdout (content/JSON) only; trace validated via --conditions-trace-out file
+- No reliance on Console.SetOut capture; compatible with current CI workflows
+
+Edge cases:
+- Nested ifs up to depth=10, then fail
+- Empty branches, whitespace-only blocks
+- Literal `{{#if` inside code fences should still be parsed (no language-sensitive parsing)
 
 Unit:
 - Expression parsing precedence, functions, case modes

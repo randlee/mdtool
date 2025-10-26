@@ -704,6 +704,54 @@ Evaluate conditional blocks and prune content based on boolean expressions over 
 ```csharp
 public class ConditionalEvaluator
 {
+    // Basic evaluation (returns pruned content only)
+    public ProcessingResult<string> Evaluate(
+        string content,
+        IArgsAccessor args,
+        ConditionalOptions options);
+
+    // Detailed evaluation (returns pruned content and a machine-readable trace)
+    public ProcessingResult<(string Content, ConditionalTrace Trace)> EvaluateDetailed(
+        string content,
+        IArgsAccessor args,
+        ConditionalOptions options);
+}
+
+public record ConditionalOptions(
+    bool Strict = false,
+    bool CaseSensitiveStrings = false,
+    int MaxNesting = 10
+);
+
+public interface IArgsAccessor
+{
+    bool TryGet(string path, out object? value);
+}
+
+public sealed class ArgsJsonAccessor : IArgsAccessor
+{
+    // Wraps JsonDocument/JsonElement and supports case-insensitive, dot-path lookups
+}
+
+public sealed class ConditionalTrace
+{
+    public List<ConditionalBlockTrace> Blocks { get; init; } = new();
+}
+
+public sealed class ConditionalBlockTrace
+{
+    public int StartLine { get; init; }
+    public int EndLine { get; init; }
+    public List<ConditionalBranchTrace> Branches { get; init; } = new();
+}
+
+public sealed class ConditionalBranchTrace
+{
+    public string Kind { get; init; } = "if"; // if | else-if | else
+    public string? Expr { get; init; }
+    public bool Taken { get; init; }
+}
+{
     public ProcessingResult<string> Evaluate(
         string content,
         IArgsAccessor args,

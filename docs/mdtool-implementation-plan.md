@@ -379,6 +379,10 @@ JSON:
 
 ### Conditional Logic
 
+Testability notes:
+- ConditionalEvaluator lives in Core; no CLI dependency
+- Provide ArgsJsonAccessor; EvaluateDetailed for unit tests; --conditions-trace-out for integration tests
+
 Updated syntax and evaluation:
 
 ```markdown

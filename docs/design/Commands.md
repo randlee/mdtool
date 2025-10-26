@@ -196,6 +196,7 @@ mdtool validate <file> --args <path>
 || `--args <path>` | string | Yes      | Path to JSON arguments file     |
 
 Additional options (conditionals):
+- `--conditions-trace-out <path>`: write JSON trace file of conditional decisions
 - `--no-conditions` (bool): Skip conditional evaluation
 - `--strict-conditions` (bool): Error on unknown vars; case-sensitive string comparisons
 - `--require-all-yaml` (bool): Require all YAML-required variables even if not referenced
@@ -348,6 +349,7 @@ mdtool process <file> --args <path> [--output <path>] [--force]
 || `--force`         | flag    | No       | Overwrite existing output file           |
 
 Additional options (conditionals):
+- `--conditions-trace-out <path>`: write JSON trace file of conditional decisions
 - `--no-conditions` (bool): Skip conditional evaluation (tags remain in content)
 - `--strict-conditions` (bool): Error on unknown variables; case-sensitive string comparisons
 - `--require-all-yaml` (bool): Require all YAML-required variables during pre-validation
