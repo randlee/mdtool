@@ -25,4 +25,10 @@
     <ProjectReference Include="..\..\src\MDTool\MDTool.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="fixtures\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
