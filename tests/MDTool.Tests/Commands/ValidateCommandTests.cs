@@ -1,6 +1,5 @@
-using System.CommandLine;
+using System.Diagnostics;
 using System.Text.Json;
-using MDTool.Commands;
 using Xunit;
 
 namespace MDTool.Tests.Commands;
@@ -11,6 +10,23 @@ namespace MDTool.Tests.Commands;
 public class ValidateCommandTests : IDisposable
 {
     private readonly List<string> _tempFiles = new();
+    private readonly string _testDirectory;
+    private readonly string _projectRoot;
+    private readonly string _mdtoolPath;
+
+    public ValidateCommandTests()
+    {
+        // Create unique test directory for this test run
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"mdtool-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testDirectory);
+
+        // Get project root directory
+        // On CI (GitHub Actions), use GITHUB_WORKSPACE if available
+        // Otherwise, go up from test bin directory
+        _projectRoot = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE")
+            ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        _mdtoolPath = Path.Combine(_projectRoot, "src/MDTool/MDTool.csproj");
+    }
 
     public void Dispose()
     {
@@ -19,6 +35,19 @@ public class ValidateCommandTests : IDisposable
             if (File.Exists(file))
             {
                 File.Delete(file);
+            }
+        }
+
+        // Clean up test directory
+        if (Directory.Exists(_testDirectory))
+        {
+            try
+            {
+                Directory.Delete(_testDirectory, recursive: true);
+            }
+            catch
+            {
+                // Ignore cleanup errors
             }
         }
     }
@@ -50,18 +79,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ValidateCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "validate", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"validate \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(0, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
         Assert.True(json.RootElement.TryGetProperty("provided", out var provided));
         Assert.True(provided.GetArrayLength() >= 2);
@@ -85,18 +109,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ValidateCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "validate", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"validate \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(1, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(1, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
         Assert.True(json.RootElement.TryGetProperty("missing", out var missing));
         Assert.Contains("PORT", missing.EnumerateArray().Select(e => e.GetString()).ToList());
@@ -123,18 +142,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ValidateCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "validate", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"validate \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(0, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
     }
 
@@ -155,18 +169,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ValidateCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "validate", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"validate \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(0, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
     }
 
@@ -191,18 +200,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ValidateCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "validate", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"validate \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(0, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean());
     }
 
@@ -221,41 +225,46 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ValidateCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "validate", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"validate \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(1, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(1, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
-    private async Task<(int ExitCode, string StdOut, string StdErr)> CaptureOutput(Func<Task<int>> action)
+    private async Task<(int exitCode, string output, string error)> RunCommand(string args)
     {
-        var originalOut = Console.Out;
-        var originalErr = Console.Error;
+        // Use the built DLL directly instead of 'dotnet run' to avoid build output in stdout
+        var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? "Debug";
+        var dllPath = Path.Combine(_projectRoot, $"src/MDTool/bin/{configuration}/net8.0/MDTool.dll");
 
-        using var outWriter = new StringWriter();
-        using var errWriter = new StringWriter();
-
-        Console.SetOut(outWriter);
-        Console.SetError(errWriter);
-
-        try
+        var psi = new ProcessStartInfo
         {
-            var exitCode = await action();
-            return (exitCode, outWriter.ToString(), errWriter.ToString());
-        }
-        finally
+            FileName = "dotnet",
+            Arguments = $"\"{dllPath}\" {args}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = _testDirectory
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
         {
-            Console.SetOut(originalOut);
-            Console.SetError(originalErr);
+            throw new InvalidOperationException("Failed to start process");
         }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        var output = await outputTask;
+        var error = await errorTask;
+
+        return (process.ExitCode, output, error);
     }
 }

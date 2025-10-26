@@ -1,6 +1,5 @@
-using System.CommandLine;
+using System.Diagnostics;
 using System.Text.Json;
-using MDTool.Commands;
 using Xunit;
 
 namespace MDTool.Tests.Commands;
@@ -11,6 +10,23 @@ namespace MDTool.Tests.Commands;
 public class ProcessCommandTests : IDisposable
 {
     private readonly List<string> _tempFiles = new();
+    private readonly string _testDirectory;
+    private readonly string _projectRoot;
+    private readonly string _mdtoolPath;
+
+    public ProcessCommandTests()
+    {
+        // Create unique test directory for this test run
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"mdtool-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testDirectory);
+
+        // Get project root directory
+        // On CI (GitHub Actions), use GITHUB_WORKSPACE if available
+        // Otherwise, go up from test bin directory
+        _projectRoot = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE")
+            ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        _mdtoolPath = Path.Combine(_projectRoot, "src/MDTool/MDTool.csproj");
+    }
 
     public void Dispose()
     {
@@ -19,6 +35,19 @@ public class ProcessCommandTests : IDisposable
             if (File.Exists(file))
             {
                 File.Delete(file);
+            }
+        }
+
+        // Clean up test directory
+        if (Directory.Exists(_testDirectory))
+        {
+            try
+            {
+                Directory.Delete(_testDirectory, recursive: true);
+            }
+            catch
+            {
+                // Ignore cleanup errors
             }
         }
     }
@@ -50,20 +79,15 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        Assert.Contains("MyApp", output.StdOut);
-        Assert.Contains("8080", output.StdOut);
-        Assert.Contains("# MyApp running on port 8080", output.StdOut);
+        Assert.Equal(0, exitCode);
+        Assert.Contains("MyApp", output);
+        Assert.Contains("8080", output);
+        Assert.Contains("# MyApp running on port 8080", output);
     }
 
     [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
@@ -83,21 +107,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var outputFile = Path.GetTempFileName();
-        _tempFiles.Add(outputFile);
-        File.Delete(outputFile); // Delete so test can create it
-
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
+        var outputFile = Path.Combine(_testDirectory, "output.md");
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile, "--output", outputFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\" --output \"{outputFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
+        Assert.Equal(0, exitCode);
         Assert.True(File.Exists(outputFile));
         var content = File.ReadAllText(outputFile);
         Assert.Contains("# Hello World", content);
@@ -122,18 +138,12 @@ variables:
         var argsFile = CreateTempFile(args);
         var outputFile = CreateTempFile("existing content");
 
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
-
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile, "--output", outputFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\" --output \"{outputFile}\"");
 
         // Assert
-        Assert.Equal(1, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(1, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
@@ -156,17 +166,11 @@ variables:
         var argsFile = CreateTempFile(args);
         var outputFile = CreateTempFile("existing content");
 
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
-
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile, "--output", outputFile, "--force" });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\" --output \"{outputFile}\" --force");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
+        Assert.Equal(0, exitCode);
         var content = File.ReadAllText(outputFile);
         Assert.Contains("# Overwritten", content);
     }
@@ -189,18 +193,13 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(1, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(1, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
@@ -226,19 +225,14 @@ Email: {{USER.EMAIL}}";
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        Assert.Contains("John Doe", output.StdOut);
-        Assert.Contains("john@example.com", output.StdOut);
+        Assert.Equal(0, exitCode);
+        Assert.Contains("John Doe", output);
+        Assert.Contains("john@example.com", output);
     }
 
     [Fact(Skip = "Test infrastructure issue - console output capture unreliable in full test suite.")]
@@ -262,41 +256,46 @@ variables:
 
         var markdownFile = CreateTempFile(markdown);
         var argsFile = CreateTempFile(args);
-        var command = new ProcessCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "process", markdownFile, "--args", argsFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"process \"{markdownFile}\" --args \"{argsFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        Assert.Contains("MyApp", output.StdOut);
-        Assert.Contains("8080", output.StdOut);
+        Assert.Equal(0, exitCode);
+        Assert.Contains("MyApp", output);
+        Assert.Contains("8080", output);
     }
 
-    private async Task<(int ExitCode, string StdOut, string StdErr)> CaptureOutput(Func<Task<int>> action)
+    private async Task<(int exitCode, string output, string error)> RunCommand(string args)
     {
-        var originalOut = Console.Out;
-        var originalErr = Console.Error;
+        // Use the built DLL directly instead of 'dotnet run' to avoid build output in stdout
+        var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? "Debug";
+        var dllPath = Path.Combine(_projectRoot, $"src/MDTool/bin/{configuration}/net8.0/MDTool.dll");
 
-        using var outWriter = new StringWriter();
-        using var errWriter = new StringWriter();
-
-        Console.SetOut(outWriter);
-        Console.SetError(errWriter);
-
-        try
+        var psi = new ProcessStartInfo
         {
-            var exitCode = await action();
-            return (exitCode, outWriter.ToString(), errWriter.ToString());
-        }
-        finally
+            FileName = "dotnet",
+            Arguments = $"\"{dllPath}\" {args}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = _testDirectory
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
         {
-            Console.SetOut(originalOut);
-            Console.SetError(originalErr);
+            throw new InvalidOperationException("Failed to start process");
         }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        var output = await outputTask;
+        var error = await errorTask;
+
+        return (process.ExitCode, output, error);
     }
 }

@@ -1,6 +1,5 @@
-using System.CommandLine;
+using System.Diagnostics;
 using System.Text.Json;
-using MDTool.Commands;
 using Xunit;
 
 namespace MDTool.Tests.Commands;
@@ -11,6 +10,23 @@ namespace MDTool.Tests.Commands;
 public class GetSchemaCommandTests : IDisposable
 {
     private readonly List<string> _tempFiles = new();
+    private readonly string _testDirectory;
+    private readonly string _projectRoot;
+    private readonly string _mdtoolPath;
+
+    public GetSchemaCommandTests()
+    {
+        // Create unique test directory for this test run
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"mdtool-test-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_testDirectory);
+
+        // Get project root directory
+        // On CI (GitHub Actions), use GITHUB_WORKSPACE if available
+        // Otherwise, go up from test bin directory
+        _projectRoot = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE")
+            ?? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
+        _mdtoolPath = Path.Combine(_projectRoot, "src/MDTool/MDTool.csproj");
+    }
 
     public void Dispose()
     {
@@ -20,6 +36,19 @@ public class GetSchemaCommandTests : IDisposable
             if (File.Exists(file))
             {
                 File.Delete(file);
+            }
+        }
+
+        // Clean up test directory
+        if (Directory.Exists(_testDirectory))
+        {
+            try
+            {
+                Directory.Delete(_testDirectory, recursive: true);
+            }
+            catch
+            {
+                // Ignore cleanup errors
             }
         }
     }
@@ -48,23 +77,19 @@ variables:
 # {{NAME}} running on port {{PORT}}";
 
         var inputFile = CreateTempFile(markdown);
-        var command = new GetSchemaCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "get-schema", inputFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"get-schema \"{inputFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        Assert.False(string.IsNullOrWhiteSpace(output.StdOut), $"Output was empty. StdErr: {output.StdErr}");
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(0, exitCode);
+        Assert.False(string.IsNullOrWhiteSpace(output), $"Output was empty. StdErr: {error}");
+        var json = JsonDocument.Parse(output);
         Assert.True(json.RootElement.TryGetProperty("name", out var nameElement));
         Assert.Equal("Application name", nameElement.GetString());
         Assert.True(json.RootElement.TryGetProperty("port", out var portElement));
-        Assert.Equal(8080, portElement.GetInt32());
+        // Port is returned as string from default value
+        Assert.Equal("8080", portElement.GetString());
     }
 
     [Fact]
@@ -79,21 +104,13 @@ variables:
 # {{TEST}}";
 
         var inputFile = CreateTempFile(markdown);
-        var outputFile = Path.GetTempFileName();
-        _tempFiles.Add(outputFile);
-        File.Delete(outputFile); // Delete so test can create it
-
-        var command = new GetSchemaCommand();
-        var rootCommand = new RootCommand { command };
+        var outputFile = Path.Combine(_testDirectory, "output.json");
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "get-schema", inputFile, "--output", outputFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"get-schema \"{inputFile}\" --output \"{outputFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
+        Assert.Equal(0, exitCode);
         Assert.True(File.Exists(outputFile));
         var content = File.ReadAllText(outputFile);
         var json = JsonDocument.Parse(content);
@@ -105,18 +122,14 @@ variables:
     public async Task GetSchema_FileNotFound_ReturnsError()
     {
         // Arrange
-        var command = new GetSchemaCommand();
-        var rootCommand = new RootCommand { command };
+        var nonExistentFile = Path.Combine(_testDirectory, "nonexistent.md");
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "get-schema", "/nonexistent/file.md" });
-        });
+        var (exitCode, output, error) = await RunCommand($"get-schema \"{nonExistentFile}\"");
 
         // Assert
-        Assert.Equal(1, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(1, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
         Assert.True(json.RootElement.GetProperty("errors").GetArrayLength() > 0);
     }
@@ -133,18 +146,13 @@ variables:
 # Test";
 
         var inputFile = CreateTempFile(markdown);
-        var command = new GetSchemaCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "get-schema", inputFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"get-schema \"{inputFile}\"");
 
         // Assert
-        Assert.Equal(1, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(1, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.False(json.RootElement.GetProperty("success").GetBoolean());
     }
 
@@ -161,18 +169,13 @@ variables:
 # {{USER.NAME}} - {{USER.EMAIL}}";
 
         var inputFile = CreateTempFile(markdown);
-        var command = new GetSchemaCommand();
-        var rootCommand = new RootCommand { command };
 
         // Act
-        var output = await CaptureOutput(async () =>
-        {
-            return await rootCommand.InvokeAsync(new[] { "get-schema", inputFile });
-        });
+        var (exitCode, output, error) = await RunCommand($"get-schema \"{inputFile}\"");
 
         // Assert
-        Assert.Equal(0, output.ExitCode);
-        var json = JsonDocument.Parse(output.StdOut);
+        Assert.Equal(0, exitCode);
+        var json = JsonDocument.Parse(output);
         Assert.True(json.RootElement.TryGetProperty("user", out var userElement));
         Assert.True(userElement.TryGetProperty("name", out var nameElement));
         Assert.Equal("User name", nameElement.GetString());
@@ -180,26 +183,36 @@ variables:
         Assert.Equal("User email", emailElement.GetString());
     }
 
-    private async Task<(int ExitCode, string StdOut, string StdErr)> CaptureOutput(Func<Task<int>> action)
+    private async Task<(int exitCode, string output, string error)> RunCommand(string args)
     {
-        var originalOut = Console.Out;
-        var originalErr = Console.Error;
+        // Use the built DLL directly instead of 'dotnet run' to avoid build output in stdout
+        var configuration = Environment.GetEnvironmentVariable("CONFIGURATION") ?? "Debug";
+        var dllPath = Path.Combine(_projectRoot, $"src/MDTool/bin/{configuration}/net8.0/MDTool.dll");
 
-        using var outWriter = new StringWriter();
-        using var errWriter = new StringWriter();
-
-        Console.SetOut(outWriter);
-        Console.SetError(errWriter);
-
-        try
+        var psi = new ProcessStartInfo
         {
-            var exitCode = await action();
-            return (exitCode, outWriter.ToString(), errWriter.ToString());
-        }
-        finally
+            FileName = "dotnet",
+            Arguments = $"\"{dllPath}\" {args}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            WorkingDirectory = _testDirectory
+        };
+
+        var process = Process.Start(psi);
+        if (process == null)
         {
-            Console.SetOut(originalOut);
-            Console.SetError(originalErr);
+            throw new InvalidOperationException("Failed to start process");
         }
+
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        var output = await outputTask;
+        var error = await errorTask;
+
+        return (process.ExitCode, output, error);
     }
 }

@@ -378,9 +378,11 @@ variables:
   NAME: ""Name""
   VERSION:
     description: ""Version""
+    required: false
     default: ""1.0.0""
   DEBUG:
     description: ""Debug mode""
+    required: false
     default: ""false""
 ---
 # {{NAME}} v{{VERSION}}
