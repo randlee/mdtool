@@ -362,44 +362,32 @@ namespace MDTool.Utilities;
 
 public static class FileHelper
 {
-    private const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
-    private const int FileOperationTimeoutMs = 30_000; // 30 seconds
+    public const long MaxFileSizeBytes = 10 * 1024 * 1024; // 10 MB
 
     /// <summary>
     /// Reads a file with validation and UTF-8 decoding.
     /// </summary>
-    /// <param name="path">Absolute or relative file path</param>
-    /// <returns>Result with file contents or errors</returns>
-    public static Result<string> ReadFile(string path);
+    public static Task<ProcessingResult<string>> ReadFileAsync(string path);
 
     /// <summary>
     /// Writes content to a file with overwrite protection.
     /// </summary>
-    /// <param name="path">Target file path</param>
-    /// <param name="content">Content to write</param>
-    /// <param name="force">If true, overwrite existing files without prompt</param>
-    /// <returns>Result indicating success or failure</returns>
-    public static Result<Unit> WriteFile(string path, string content, bool force = false);
+    public static Task<ProcessingResult<Unit>> WriteFileAsync(string path, string content, bool force = false);
 
     /// <summary>
     /// Validates a file path for security issues.
+    /// strictForMacros enforces extra traversal rules for Phase 2 expansions.
     /// </summary>
-    /// <param name="path">Path to validate</param>
-    /// <returns>Result with normalized path or validation errors</returns>
-    public static Result<string> ValidatePath(string path);
+    public static ProcessingResult<string> ValidatePath(string path, bool strictForMacros = false);
 
     /// <summary>
     /// Checks if a file's size is within the allowed limit.
     /// </summary>
-    /// <param name="path">File path to check</param>
-    /// <returns>Result indicating if file size is acceptable</returns>
-    public static Result<Unit> CheckFileSize(string path);
+    public static ProcessingResult<Unit> CheckFileSize(string path);
 
     /// <summary>
     /// Resolves a relative path from the current working directory.
     /// </summary>
-    /// <param name="path">Relative or absolute path</param>
-    /// <returns>Absolute path resolved from CWD</returns>
     public static string ResolvePathFromCwd(string path);
 }
 ```
@@ -489,46 +477,23 @@ public static Result<string> ReadFile(string path)
 **Implementation:**
 
 ```csharp
-public static Result<Unit> WriteFile(string path, string content, bool force = false)
+public static async Task<ProcessingResult<Unit>> WriteFileAsync(string path, string content, bool force = false)
 {
     if (string.IsNullOrWhiteSpace(path))
-    {
-        return Result<Unit>.Failure(new ValidationError
-        {
-            Type = ErrorType.InvalidPath,
-            Description = "File path cannot be null or empty"
-        });
-    }
+        return ProcessingResult<Unit>.Fail(ValidationError.InvalidPath("File path cannot be null or empty"));
 
-    if (content == null)
-    {
-        return Result<Unit>.Failure(new ValidationError
-        {
-            Type = ErrorType.InvalidContent,
-            Description = "Content cannot be null"
-        });
-    }
+    if (content is null)
+        return ProcessingResult<Unit>.Fail(ValidationError.ProcessingError("Content cannot be null"));
 
-    // Validate path security
     var pathResult = ValidatePath(path);
     if (!pathResult.Success)
-    {
-        return Result<Unit>.Failure(pathResult.Errors);
-    }
+        return ProcessingResult<Unit>.Fail(pathResult.Errors);
 
-    var validatedPath = pathResult.Value;
+    var validatedPath = pathResult.Value!;
 
-    // Check for existing file (overwrite protection)
     if (File.Exists(validatedPath) && !force)
-    {
-        return Result<Unit>.Failure(new ValidationError
-        {
-            Type = ErrorType.FileAlreadyExists,
-            Description = $"File already exists (use --force to overwrite): {validatedPath}"
-        });
-    }
+        return ProcessingResult<Unit>.Fail(ValidationError.ProcessingError($"File '{validatedPath}' already exists. Use --force to overwrite."));
 
-    // Ensure directory exists
     var directory = Path.GetDirectoryName(validatedPath);
     if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
     {
@@ -538,37 +503,25 @@ public static Result<Unit> WriteFile(string path, string content, bool force = f
         }
         catch (Exception ex)
         {
-            return Result<Unit>.Failure(new ValidationError
-            {
-                Type = ErrorType.DirectoryCreationFailed,
-                Description = $"Failed to create directory: {ex.Message}"
-            });
+            return ProcessingResult<Unit>.Fail(ValidationError.ProcessingError($"Failed to create directory: {ex.Message}"));
         }
     }
 
-    // Write file with timeout
     try
     {
-        using var cts = new CancellationTokenSource(FileOperationTimeoutMs);
-        File.WriteAllText(validatedPath, content, new UTF8Encoding(false));
-        return Result<Unit>.Success(Unit.Value);
+        await File.WriteAllTextAsync(validatedPath, content, new UTF8Encoding(false));
+        return ProcessingResult<Unit>.Ok(Unit.Value);
     }
     catch (UnauthorizedAccessException)
     {
-        return Result<Unit>.Failure(new ValidationError
-        {
-            Type = ErrorType.FileAccessDenied,
-            Description = $"Access denied: {validatedPath}"
-        });
+        return ProcessingResult<Unit>.Fail(ValidationError.ProcessingError($"Access denied: {validatedPath}"));
     }
     catch (IOException ex)
     {
-        return Result<Unit>.Failure(new ValidationError
-        {
-            Type = ErrorType.FileWriteError,
-            Description = $"Failed to write file: {ex.Message}"
-        });
+        return ProcessingResult<Unit>.Fail(ValidationError.ProcessingError($"Failed to write file: {ex.Message}"));
     }
+}
+```
 }
 ```
 
@@ -586,92 +539,44 @@ public static Result<Unit> WriteFile(string path, string content, bool force = f
 **Implementation:**
 
 ```csharp
-public static Result<string> ValidatePath(string path)
+public static ProcessingResult<string> ValidatePath(string path, bool strictForMacros = false)
 {
     if (string.IsNullOrWhiteSpace(path))
-    {
-        return Result<string>.Failure(new ValidationError
-        {
-            Type = ErrorType.InvalidPath,
-            Description = "Path cannot be null or empty"
-        });
-    }
+        return ProcessingResult<string>.Fail(ValidationError.InvalidPath("Path cannot be null or empty"));
 
     try
     {
-        // Resolve to absolute path
         var absolutePath = Path.GetFullPath(path);
 
-        // Get the current working directory (CWD)
-        var cwd = Directory.GetCurrentDirectory();
-        var cwdPath = Path.GetFullPath(cwd);
-
-        // Check for directory traversal outside CWD
-        // Allow paths within CWD and its subdirectories
-        if (!absolutePath.StartsWith(cwdPath, StringComparison.OrdinalIgnoreCase))
+        if (strictForMacros)
         {
-            return Result<string>.Failure(new ValidationError
-            {
-                Type = ErrorType.PathTraversalAttempt,
-                Description = $"Path must be within current working directory: {path}"
-            });
+            if (path.Contains("..") || path.Contains("~"))
+                return ProcessingResult<string>.Fail(ValidationError.PathTraversalAttempt($"Path traversal not allowed: {path}"));
         }
 
-        // Check for suspicious patterns
-        if (path.Contains("..") || path.Contains("~"))
-        {
-            return Result<string>.Failure(new ValidationError
-            {
-                Type = ErrorType.PathTraversalAttempt,
-                Description = $"Path contains directory traversal: {path}"
-            });
-        }
-
-        // Check for invalid characters
         var invalidChars = Path.GetInvalidPathChars();
-        if (path.Any(c => invalidChars.Contains(c)))
-        {
-            return Result<string>.Failure(new ValidationError
-            {
-                Type = ErrorType.InvalidPath,
-                Description = $"Path contains invalid characters: {path}"
-            });
-        }
+        if (path.Any(invalidChars.Contains))
+            return ProcessingResult<string>.Fail(ValidationError.InvalidPath($"Path contains invalid characters: {path}"));
 
-        return Result<string>.Success(absolutePath);
+        return ProcessingResult<string>.Ok(absolutePath);
     }
-    catch (ArgumentException ex)
+    catch (Exception ex)
     {
-        return Result<string>.Failure(new ValidationError
-        {
-            Type = ErrorType.InvalidPath,
-            Description = $"Invalid path format: {ex.Message}"
-        });
-    }
-    catch (NotSupportedException ex)
-    {
-        return Result<string>.Failure(new ValidationError
-        {
-            Type = ErrorType.InvalidPath,
-            Description = $"Path format not supported: {ex.Message}"
-        });
+        return ProcessingResult<string>.Fail(ValidationError.InvalidPath(ex.Message));
     }
 }
 ```
 
 **Security Checks:**
-1. **Null/Empty Check**: Reject null or empty paths
-2. **Absolute Path Resolution**: Convert to full path
-3. **CWD Containment**: Ensure path is within CWD
-4. **Traversal Detection**: Block `..` and `~` patterns
-5. **Invalid Characters**: Check for OS-specific invalid chars
-6. **Exception Handling**: Catch path-related exceptions
+1. Null/Empty check and absolute normalization
+2. Traversal detection (only when strictForMacros=true)
+3. Invalid character detection (OS-specific)
+4. Exception handling for path APIs
 
-**Rationale for CWD Restriction:**
-- Prevents access to system files (`/etc/passwd`, `C:\Windows\System32`)
-- Aligns with git root convention (common development pattern)
-- Matches Phase 2 file expansion behavior
-- Provides predictable and secure behavior
+**Rationale:**
+- Normal CLI file I/O accepts absolute/relative paths with validation
+- strictForMacros=true hardens only file-expansion contexts (Phase 2)
+- Prevents traversal while avoiding unnecessary CWD constraints
 
 ### Method: CheckFileSize
 
@@ -1322,7 +1227,7 @@ public class FileHelperTests
 
             // Assert
             Assert.False(result.Success);
-            Assert.Equal(ErrorType.FileAlreadyExists, result.Errors[0].Type);
+Assert.Equal(ErrorType.FileExists, result.Errors[0].Type);
             Assert.Contains("--force", result.Errors[0].Description);
         }
         finally

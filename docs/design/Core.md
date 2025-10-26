@@ -63,7 +63,8 @@ Parse markdown files to extract YAML frontmatter and content, converting variabl
 ```csharp
 public class MarkdownParser
 {
-    public Result<MarkdownDocument> Parse(string filePath);
+    public ProcessingResult<MarkdownDocument> ParseContent(string content);
+    public static (bool hasYaml, string yaml, string body) SplitFrontmatter(string content);
 }
 ```
 
@@ -93,6 +94,7 @@ public class MarkdownParser
 public class MarkdownParser
 {
     private readonly IDeserializer _yamlDeserializer;
+    private static readonly Regex VarNameRegex = new(@"^[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*$", RegexOptions.Compiled);
 
     public MarkdownParser()
     {
@@ -102,259 +104,146 @@ public class MarkdownParser
             .Build();
     }
 
-    public Result<MarkdownDocument> Parse(string filePath)
+    // Core parses content only; file I/O is handled by Utilities/Commands
+    public ProcessingResult<MarkdownDocument> ParseContent(string content)
     {
         var errors = new List<ValidationError>();
 
-        // Step 1: Read file
-        string content;
-        try
-        {
-            content = File.ReadAllText(filePath);
-        }
-        catch (FileNotFoundException)
-        {
-            errors.Add(new ValidationError
-            {
-                Type = ErrorType.FileNotFound,
-                Description = $"File not found: {filePath}"
-            });
-            return Result<MarkdownDocument>.Failure(errors);
-        }
-        catch (Exception ex)
-        {
-            errors.Add(new ValidationError
-            {
-                Type = ErrorType.FileReadError,
-                Description = $"Error reading file: {ex.Message}"
-            });
-            return Result<MarkdownDocument>.Failure(errors);
-        }
-
-        // Step 2: Detect frontmatter boundaries
+        // Step 1: Detect frontmatter boundaries
         var (hasYaml, yamlContent, markdownContent) = ExtractFrontmatter(content);
 
-        // Step 3: Handle missing frontmatter
+        // Step 2: Handle missing frontmatter
         if (!hasYaml)
         {
-            return Result<MarkdownDocument>.Success(new MarkdownDocument
-            {
-                Variables = new Dictionary<string, VariableDefinition>(),
-                Content = content,
-                RawYaml = string.Empty
-            });
+            return ProcessingResult<MarkdownDocument>.Ok(new MarkdownDocument(
+                new Dictionary<string, VariableDefinition>(),
+                markdownContent,
+                null
+            ));
         }
 
-        // Step 4: Parse YAML
+        // Step 3: Parse YAML
         Dictionary<string, object> yamlData;
         try
         {
-            var yamlObject = _yamlDeserializer.Deserialize<Dictionary<string, object>>(yamlContent);
+            var yamlObject = _yamlDeserializer.Deserialize<Dictionary<string, object>>(yamlContent) ?? new();
 
-            // Look for "variables" section
             if (!yamlObject.ContainsKey("variables"))
             {
-                errors.Add(new ValidationError
-                {
-                    Type = ErrorType.InvalidYamlHeader,
-                    Description = "YAML frontmatter missing 'variables:' section"
-                });
-                return Result<MarkdownDocument>.Failure(errors);
+                errors.Add(ValidationError.InvalidYaml("YAML frontmatter missing 'variables:' section"));
+                return ProcessingResult<MarkdownDocument>.Fail(errors);
             }
 
             yamlData = yamlObject["variables"] as Dictionary<string, object>;
             if (yamlData == null)
             {
-                errors.Add(new ValidationError
-                {
-                    Type = ErrorType.InvalidYamlHeader,
-                    Description = "'variables' must be a dictionary"
-                });
-                return Result<MarkdownDocument>.Failure(errors);
+                errors.Add(ValidationError.InvalidYaml("'variables' must be a dictionary"));
+                return ProcessingResult<MarkdownDocument>.Fail(errors);
             }
         }
         catch (YamlException ex)
         {
-            errors.Add(new ValidationError
-            {
-                Type = ErrorType.InvalidYamlHeader,
-                Description = $"YAML parsing error: {ex.Message}"
-            });
-            return Result<MarkdownDocument>.Failure(errors);
+            errors.Add(ValidationError.InvalidYaml($"YAML parsing error: {ex.Message}"));
+            return ProcessingResult<MarkdownDocument>.Fail(errors);
         }
 
-        // Step 5: Convert to VariableDefinitions
-        var variables = new Dictionary<string, VariableDefinition>();
-        foreach (var kvp in yamlData)
-        {
-            var varName = kvp.Key;
+        // Step 4: Convert to VariableDefinitions and validate
+        var variables = new Dictionary<string, VariableDefinition>(StringComparer.Ordinal);
+        var rawNames = new HashSet<string>(StringComparer.Ordinal);
 
-            // Validate variable name format
-            if (!IsValidVariableName(varName))
+        foreach (var (key, val) in yamlData)
+        {
+            if (!VarNameRegex.IsMatch(key))
             {
-                errors.Add(new ValidationError
-                {
-                    Type = ErrorType.InvalidVariableFormat,
-                    Variable = varName,
-                    Description = $"Variable name '{varName}' must be uppercase with underscores"
-                });
+                errors.Add(ValidationError.InvalidFormat(key, "Variable name must be UPPERCASE with optional dot-separated segments"));
                 continue;
             }
+            rawNames.Add(key);
 
-            var varDef = ParseVariableDefinition(varName, kvp.Value);
-            if (varDef.Error != null)
+            var parsed = ParseVariableDefinition(key, val);
+            if (parsed.Error != null)
             {
-                errors.Add(varDef.Error);
+                errors.Add(parsed.Error);
                 continue;
             }
-
-            variables[varName] = varDef.Definition;
+            variables[key] = parsed.Definition;
         }
 
-        // Step 6: Validate optional variables have defaults
-        foreach (var varDef in variables.Values)
+        // Conflict rule: disallow both X and X.*
+        foreach (var name in rawNames)
         {
-            if (!varDef.Required && varDef.DefaultValue == null)
+            var prefix = name + ".";
+            if (rawNames.Any(n => n.StartsWith(prefix, StringComparison.Ordinal)))
             {
-                errors.Add(new ValidationError
-                {
-                    Type = ErrorType.InvalidYamlHeader,
-                    Variable = varDef.Name,
-                    Description = $"Optional variable '{varDef.Name}' must have a default value"
-                });
+                errors.Add(ValidationError.InvalidFormat(name, $"Conflicting variable paths: '{name}' and '{name}*'"));
             }
         }
 
-        // Step 7: Return result
+        // Optional variables must have defaults
+        foreach (var v in variables.Values)
+        {
+            if (!v.Required && v.DefaultValue == null)
+            {
+                errors.Add(ValidationError.InvalidYaml($"Optional variable '{v.Name}' must have a default value"));
+            }
+        }
+
         if (errors.Any())
         {
-            return Result<MarkdownDocument>.Failure(errors);
+            return ProcessingResult<MarkdownDocument>.Fail(errors);
         }
 
-        return Result<MarkdownDocument>.Success(new MarkdownDocument
-        {
-            Variables = variables,
-            Content = markdownContent,
-            RawYaml = yamlContent
-        });
+        return ProcessingResult<MarkdownDocument>.Ok(new MarkdownDocument(variables, markdownContent, yamlContent));
     }
 
-    private (bool hasYaml, string yaml, string content) ExtractFrontmatter(string content)
+    public static (bool hasYaml, string yaml, string content) ExtractFrontmatter(string content)
     {
-        // Check if file starts with ---
         if (!content.TrimStart().StartsWith("---"))
-        {
             return (false, string.Empty, content);
-        }
 
         var lines = content.Split('\n');
-        int startIndex = -1;
-        int endIndex = -1;
+        int startIndex = -1, endIndex = -1;
 
-        // Find first --- (skip empty lines)
         for (int i = 0; i < lines.Length; i++)
         {
-            if (lines[i].Trim() == "---")
-            {
-                startIndex = i;
-                break;
-            }
+            if (lines[i].Trim() == "---") { startIndex = i; break; }
         }
+        if (startIndex == -1) return (false, string.Empty, content);
 
-        if (startIndex == -1)
-        {
-            return (false, string.Empty, content);
-        }
-
-        // Find closing ---
         for (int i = startIndex + 1; i < lines.Length; i++)
         {
-            if (lines[i].Trim() == "---")
-            {
-                endIndex = i;
-                break;
-            }
+            if (lines[i].Trim() == "---") { endIndex = i; break; }
         }
+        if (endIndex == -1) return (false, string.Empty, content);
 
-        if (endIndex == -1)
-        {
-            return (false, string.Empty, content);
-        }
-
-        // Extract YAML and content
-        var yamlLines = lines.Skip(startIndex + 1).Take(endIndex - startIndex - 1);
-        var contentLines = lines.Skip(endIndex + 1);
-
-        var yaml = string.Join('\n', yamlLines);
-        var markdown = string.Join('\n', contentLines);
-
-        return (true, yaml, markdown);
+        var yaml = string.Join('\n', lines.Skip(startIndex + 1).Take(endIndex - startIndex - 1));
+        var body = string.Join('\n', lines.Skip(endIndex + 1));
+        return (true, yaml, body);
     }
 
-    private bool IsValidVariableName(string name)
+    private (VariableDefinition Definition, ValidationError Error) ParseVariableDefinition(string name, object value)
     {
-        // Must start with letter, contain only A-Z, 0-9, underscore
-        // Can have dots for nesting (handled in extraction)
-        var regex = new Regex(@"^[A-Z][A-Z0-9_]*$");
-        return regex.IsMatch(name);
-    }
-
-    private (VariableDefinition Definition, ValidationError Error) ParseVariableDefinition(
-        string name,
-        object value)
-    {
-        // Simple string format: NAME: "description"
-        if (value is string stringValue)
+        if (value is string s)
         {
-            return (new VariableDefinition
-            {
-                Name = name,
-                Description = stringValue,
-                Required = true,
-                DefaultValue = null
-            }, null);
+            return (new VariableDefinition(name, s, required: true, defaultValue: null), null);
         }
-
-        // Object format: NAME: { description, required, default }
-        if (value is Dictionary<object, object> objValue)
+        if (value is Dictionary<object, object> obj)
         {
-            var dict = objValue.ToDictionary(
-                k => k.Key.ToString(),
-                v => v.Value);
-
+            var dict = obj.ToDictionary(k => k.Key.ToString(), v => v.Value);
             if (!dict.ContainsKey("description"))
             {
-                return (null, new ValidationError
-                {
-                    Type = ErrorType.InvalidYamlHeader,
-                    Variable = name,
-                    Description = $"Variable '{name}' object must have 'description' field"
-                });
+                return (null, ValidationError.InvalidYaml($"Variable '{name}' object must have 'description' field"));
             }
-
-            var description = dict["description"].ToString();
-            var required = dict.ContainsKey("required")
-                ? Convert.ToBoolean(dict["required"])
-                : true;
-            var defaultValue = dict.ContainsKey("default")
-                ? dict["default"]
-                : null;
-
-            return (new VariableDefinition
+            var description = dict["description"]?.ToString() ?? string.Empty;
+            var required = dict.ContainsKey("required") ? Convert.ToBoolean(dict["required"]) : true;
+            var defaultValue = dict.ContainsKey("default") ? dict["default"] : null;
+            if (!required && defaultValue == null)
             {
-                Name = name,
-                Description = description,
-                Required = required,
-                DefaultValue = defaultValue
-            }, null);
+                return (null, ValidationError.InvalidYaml($"Optional variable '{name}' must have a default value"));
+            }
+            return (new VariableDefinition(name, description, required, defaultValue), null);
         }
-
-        return (null, new ValidationError
-        {
-            Type = ErrorType.InvalidYamlHeader,
-            Variable = name,
-            Description = $"Variable '{name}' must be a string or object"
-        });
+        return (null, ValidationError.InvalidYaml($"Variable '{name}' must be a string or object"));
     }
 }
 ```
@@ -467,7 +356,7 @@ public class VariableExtractor
         RegexOptions.Compiled | RegexOptions.Multiline
     );
 
-    private const int MaxNestingDepth = 5;
+private const int MaxNestingDepth = 10;
 
     public List<ExtractedVariable> Extract(string content)
     {
@@ -637,7 +526,7 @@ public class SchemaGenerator
 {
     public string GenerateSchema(Dictionary<string, VariableDefinition> variables)
     {
-        var schema = new Dictionary<string, object>();
+        var schema = new Dictionary<string, object>(StringComparer.Ordinal);
 
         foreach (var variable in variables.Values.OrderBy(v => v.Name))
         {
@@ -647,41 +536,43 @@ public class SchemaGenerator
             // Navigate/create nested structure
             for (int i = 0; i < path.Length - 1; i++)
             {
-                var segment = path[i].ToLowerInvariant();
-
-                if (!current.ContainsKey(segment))
+                var segmentKey = ToLowerCamel(path[i]);
+                if (!current.TryGetValue(segmentKey, out var next) || next is not Dictionary<string, object> dict)
                 {
-                    current[segment] = new Dictionary<string, object>();
+                    dict = new Dictionary<string, object>(StringComparer.Ordinal);
+                    current[segmentKey] = dict;
                 }
-
-                current = current[segment] as Dictionary<string, object>;
+                current = dict;
             }
 
             // Set final value
-            var finalKey = path[^1].ToLowerInvariant();
+            var finalKey = ToLowerCamel(path[^1]);
             var value = GetSchemaValue(variable);
             current[finalKey] = value;
         }
 
-        // Serialize to JSON
         var options = new JsonSerializerOptions
         {
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
-
         return JsonSerializer.Serialize(schema, options);
+    }
+
+    private static string ToLowerCamel(string segment)
+    {
+        if (string.IsNullOrEmpty(segment)) return segment;
+        // Convert UPPER or UPPER_SNAKE to lowerCamel
+        var parts = segment.Split('_', StringSplitOptions.RemoveEmptyEntries)
+                           .Select(p => p.ToLowerInvariant()).ToArray();
+        if (parts.Length == 0) return string.Empty;
+        return parts[0] + string.Concat(parts.Skip(1).Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
     }
 
     private object GetSchemaValue(VariableDefinition variable)
     {
-        // For optional variables, use the default value
         if (!variable.Required && variable.DefaultValue != null)
-        {
             return variable.DefaultValue;
-        }
-
-        // For required variables, use description as placeholder
         return variable.Description;
     }
 }
@@ -717,12 +608,12 @@ The schema generator converts dot notation into nested JSON objects:
 
 ### Case Conversion
 
-Variable names in markdown are **UPPERCASE**, but JSON keys are converted to **lowercase** for conventional JSON formatting:
+Variable names in markdown are **UPPERCASE**, but JSON keys are converted to **lowerCamelCase** for conventional JSON formatting:
 
 - `{{NAME}}` → `"name": "..."`
 - `{{USER.EMAIL}}` → `"user": { "email": "..." }`
 
-This allows natural JSON syntax while maintaining the uppercase convention in markdown.
+Conflict rule: if both `X` and any `X.*` variables exist in YAML, parsing fails with InvalidVariableFormat.
 
 ### Value Assignment Rules
 

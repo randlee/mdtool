@@ -92,6 +92,7 @@ mdtool get-schema <file> [--output <path>]
 
 2. Generate JSON schema
    ├── Convert variable definitions to JSON structure
+   ├── Convert each path segment to lowerCamelCase
    ├── Use descriptions as placeholder values
    ├── Include default values for optional variables
    └── Support nested object structure (dot notation)
@@ -640,25 +641,14 @@ try
 }
 catch (Exception ex)
 {
-    var error = new
+    Console.WriteLine(JsonOutput.Failure(new List<ValidationError>
     {
-        success = false,
-        errors = new[]
+        new ValidationError
         {
-            new
-            {
-                type = "UnhandledException",
-                description = ex.Message,
-                stackTrace = ex.StackTrace
-            }
+            Type = ErrorType.UnhandledException,
+            Description = ex.Message
         }
-    };
-
-    Console.WriteLine(JsonSerializer.Serialize(error, new JsonSerializerOptions
-    {
-        WriteIndented = true
     }));
-
     return 1;
 }
 ```

@@ -244,8 +244,8 @@ namespace MDTool.Models;
 public class VariableDefinition
 {
     /// <summary>
-    /// The variable name in uppercase snake-case format.
-    /// Must match pattern: [A-Z][A-Z0-9_]*
+/// The variable name in uppercase snake-case with optional dot-separated segments.
+/// Must match pattern: ^[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*$
     /// </summary>
     public string Name { get; init; }
 
@@ -303,25 +303,14 @@ public class VariableDefinition
     /// Validates variable name format: uppercase snake-case with underscores.
     /// Pattern: [A-Z][A-Z0-9_]*
     /// </summary>
-    private static bool IsValidVariableName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return false;
+private static readonly Regex VarNameRegex = new(
+    @"^[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*$",
+    RegexOptions.Compiled);
 
-        // Must start with uppercase letter
-        if (!char.IsUpper(name[0]) || !char.IsLetter(name[0]))
-            return false;
-
-        // Rest must be uppercase letters, digits, or underscores
-        for (int i = 1; i < name.Length; i++)
-        {
-            char c = name[i];
-            if (!char.IsUpper(c) && !char.IsDigit(c) && c != '_')
-                return false;
-        }
-
-        return true;
-    }
+private static bool IsValidVariableName(string name)
+{
+    return !string.IsNullOrWhiteSpace(name) && VarNameRegex.IsMatch(name);
+}
 
     /// <summary>
     /// Infers the type of this variable from its default value.
@@ -384,7 +373,7 @@ var debug = VariableDefinition.Optional("DEBUG", "Debug mode", false);
 
 ### Validation Rules
 
-1. **Name format**: Must match `[A-Z][A-Z0-9_]*` (uppercase snake-case)
+1. **Name format**: Must match `^[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*$` (UPPER_SNAKE with optional dot segments)
 2. **Name required**: Cannot be null or whitespace
 3. **Optional variables must have defaults**: If `Required=false`, `DefaultValue` cannot be null
 4. **Name normalization**: Names are automatically converted to uppercase
@@ -769,6 +758,17 @@ var combined = ValidationResult.Combine(result1, result2);
 ```
 
 ---
+
+### Unit Type
+
+```csharp
+namespace MDTool.Models;
+
+public readonly struct Unit
+{
+    public static readonly Unit Value = new();
+}
+```
 
 ## ProcessingResult Class
 
@@ -1243,34 +1243,22 @@ public class ValidationError
 /// </summary>
 public enum ErrorType
 {
-    /// <summary>
-    /// A required variable was not provided in the arguments.
-    /// </summary>
     MissingRequiredVariable,
-
-    /// <summary>
-    /// The YAML frontmatter could not be parsed.
-    /// </summary>
     InvalidYamlHeader,
-
-    /// <summary>
-    /// The JSON arguments file could not be parsed.
-    /// </summary>
     InvalidJsonArgs,
-
-    /// <summary>
-    /// The specified file was not found.
-    /// </summary>
     FileNotFound,
-
-    /// <summary>
-    /// A variable in the markdown has invalid format (e.g., malformed {{VAR}}).
-    /// </summary>
+    FileSizeExceeded,
+    FileExists,
+    FileAccessDenied,
+    FileReadError,
+    FileWriteError,
+    DirectoryCreationFailed,
+    InvalidPath,
+    PathTraversalAttempt,
     InvalidVariableFormat,
-
-    /// <summary>
-    /// A generic processing error occurred.
-    /// </summary>
+    RecursionDepthExceeded,
+    UnhandledException,
+    SerializationError,
     ProcessingError
 }
 ```

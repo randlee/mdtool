@@ -6,6 +6,25 @@
 
 ---
 
+## Sprint 1 Progress Summary
+
+**Current Status:** Waves 1 & 2 Complete, Wave 3 Ready to Begin
+
+| Wave | Component | Status | Tests | Coverage | QA |
+|------|-----------|--------|-------|----------|-----|
+| Wave 1 | Models | ✅ COMPLETE | 157/157 | 99%+ | CONDITIONAL PASS |
+| Wave 2A | Utilities | ✅ COMPLETE | 62/62 | >80% | PASS |
+| Wave 2B | Core | ✅ COMPLETE | 84/84 | >80% | PASS |
+| Wave 2 | Integration | ✅ COMPLETE | 14/14 | N/A | PASS |
+| Wave 3 | Commands | 🔄 NEXT | 0 | N/A | PENDING |
+| Wave 4 | Integration & Docs | ⏸️ BLOCKED | 0 | N/A | PENDING |
+
+**Total Tests Passing:** 317/317 (100%)
+**Build Status:** Zero warnings, zero errors
+**Ready for:** Wave 3 Commands implementation
+
+---
+
 ## Project Decisions & Conventions
 
 ### Variable Naming
@@ -60,79 +79,101 @@
 ## Phase 1: MVP (Core Functionality)
 
 ### Project Setup
-- [ ] Create .NET 8.0 console application
-  - [ ] Initialize solution structure (`src/MDTool/`, `tests/MDTool.Tests/`)
-  - [ ] Configure `.csproj` with global tool settings
-  - [ ] Set `PackAsTool=true`, `ToolCommandName=mdtool`
-- [ ] Add NuGet dependencies
-  - [ ] `System.CommandLine` (2.0.0-beta4 or later)
-  - [ ] `YamlDotNet` (latest stable)
-  - [ ] `System.Text.Json` (built-in .NET 8)
-- [ ] Configure project metadata
-  - [ ] Set version to 1.0.0
-  - [ ] Add package description
-  - [ ] Configure authors and license
-- [ ] Setup test project
-  - [ ] Create xUnit test project
-  - [ ] Add project references
-  - [ ] Configure test fixtures directory
+- [✅] Create .NET 8.0 console application
+  - [✅] Initialize solution structure (`src/MDTool/`, `tests/MDTool.Tests/`)
+  - [✅] Configure `.csproj` with global tool settings
+  - [✅] Set `PackAsTool=true`, `ToolCommandName=mdtool`
+- [✅] Add NuGet dependencies
+  - [✅] `System.CommandLine` (2.0.0-beta4 or later)
+  - [✅] `YamlDotNet` (latest stable)
+  - [✅] `System.Text.Json` (built-in .NET 8)
+- [✅] Configure project metadata
+  - [✅] Set version to 1.0.0
+  - [✅] Add package description
+  - [✅] Configure authors and license
+- [✅] Setup test project
+  - [✅] Create xUnit test project
+  - [✅] Add project references
+  - [✅] Configure test fixtures directory
 
-### Core Models (Models/)
-- [ ] Create `MarkdownDocument.cs`
-  - [ ] Properties: `Variables`, `Content`, `RawYaml`
-  - [ ] Constructor and initialization
-- [ ] Create `VariableDefinition.cs`
-  - [ ] Properties: `Name`, `Description`, `Required`, `DefaultValue`
-  - [ ] Support for type inference from default value
-- [ ] Create `ValidationResult.cs`
-  - [ ] Properties: `Success`, `Errors`, `ProvidedVariables`, `MissingVariables`
-  - [ ] Helper methods for creating success/failure results
-- [ ] Create `ProcessingResult.cs`
-  - [ ] Generic Result<T> pattern implementation
-  - [ ] Error collection support
-- [ ] Create `ValidationError.cs`
-  - [ ] Properties: `Type`, `Variable`, `Description`, `Line`
-  - [ ] Error type enum: `MissingRequiredVariable`, `InvalidYamlHeader`, `InvalidJsonArgs`, `FileNotFound`, `InvalidVariableFormat`
+### Core Models (Models/) - ✅ COMPLETE (Wave 1)
+- [✅] Create `MarkdownDocument.cs`
+  - [✅] Properties: `Variables`, `Content`, `RawYaml`
+  - [✅] Constructor and initialization
+- [✅] Create `VariableDefinition.cs`
+  - [✅] Properties: `Name`, `Description`, `Required`, `DefaultValue`
+  - [✅] Support for type inference from default value
+- [✅] Create `ValidationResult.cs`
+  - [✅] Properties: `Success`, `Errors`, `ProvidedVariables`, `MissingVariables`
+  - [✅] Helper methods for creating success/failure results
+- [✅] Create `ProcessingResult.cs`
+  - [✅] Generic Result<T> pattern implementation
+  - [✅] Error collection support
+- [✅] Create `ValidationError.cs`
+  - [✅] Properties: `Type`, `Variable`, `Description`, `Line`
+  - [✅] Error type enum: 17 error types (expanded from original 5)
+- [✅] Create `Unit.cs` - Void type for ProcessingResult<Unit>
+- [✅] **Tests:** 157 tests passing (100% pass rate, 99%+ coverage)
+- [✅] **QA Status:** CONDITIONAL PASS (minor naming deviation documented)
 
-### Core Parsing (Core/)
-- [ ] Implement `MarkdownParser.cs`
-  - [ ] Method: `Parse(string filePath)` returns `Result<MarkdownDocument>`
-  - [ ] Split markdown into YAML frontmatter and content
-  - [ ] Detect frontmatter boundaries (`---`)
-  - [ ] Handle files without frontmatter gracefully
-  - [ ] Parse YAML using YamlDotNet
-  - [ ] Support simple string format: `NAME: "description"`
-  - [ ] Support object format: `NAME: { description, required, default }`
-  - [ ] Validate: optional variables must have defaults
-  - [ ] Validate: variable names follow `[A-Z][A-Z0-9_]*` pattern
-  - [ ] Collect all parsing errors (don't fail on first)
-  - [ ] Return structured Result with errors
-- [ ] Implement `VariableExtractor.cs`
-  - [ ] Method: `Extract(string content)` returns list of found variables
-  - [ ] Regex: `\{\{([A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*)\}\}`
-  - [ ] Find all `{{VARIABLE_NAME}}` patterns
-  - [ ] Support nested paths: `{{USER.NAME}}`
-  - [ ] Track line numbers for error reporting
-  - [ ] Extract unique variable names (deduplicate)
-  - [ ] Validate variable format (no malformed syntax)
-  - [ ] Handle edge cases: `{{`, `}}` without pairs
-- [ ] Implement `SchemaGenerator.cs`
-  - [ ] Method: `GenerateSchema(Dictionary<string, VariableDefinition>)` returns JSON string
-  - [ ] Convert variables to JSON schema object
-  - [ ] Use description as placeholder value for required vars
-  - [ ] Include default values for optional vars
-  - [ ] Support nested object structure via dot notation
-  - [ ] Example: `USER.NAME` → `{"user": {"name": "..."}}`
-  - [ ] Pretty-print JSON output
-- [ ] Implement `VariableSubstitutor.cs`
-  - [ ] Method: `Substitute(content, variables, args)` returns `Result<string>`
-  - [ ] Accept JSON arguments (case-insensitive)
-  - [ ] Parse nested objects via dot notation
-  - [ ] Replace `{{VAR}}` with actual values
-  - [ ] Handle optional variables (use defaults if not provided)
-  - [ ] Detect missing required variables (collect all)
-  - [ ] Validate all variables before substitution
-  - [ ] Return Result with errors or substituted content
+### Utilities (Utilities/) - ✅ COMPLETE (Wave 2A)
+- [✅] Implement `FileHelper.cs`
+  - [✅] Async methods: `ReadFileAsync`, `WriteFileAsync`
+  - [✅] `ValidatePath` with strictForMacros parameter
+  - [✅] `CheckFileSize` with 10MB limit
+  - [✅] UTF-8 encoding without BOM
+  - [✅] Directory creation in WriteFileAsync
+  - [✅] Overwrite protection (--force flag)
+- [✅] Implement `JsonOutput.cs`
+  - [✅] Success/Failure methods
+  - [✅] lowerCamelCase property naming
+  - [✅] Pretty-printed JSON output
+- [✅] **Tests:** 62 tests passing (100% pass rate)
+- [✅] **QA Status:** PASS
+
+### Core Parsing (Core/) - ✅ COMPLETE (Wave 2B)
+- [✅] Implement `MarkdownParser.cs`
+  - [✅] Method: `ParseContent(string content)` returns `ProcessingResult<MarkdownDocument>` (content-based, not file-based)
+  - [✅] Split markdown into YAML frontmatter and content
+  - [✅] Detect frontmatter boundaries (`---`)
+  - [✅] Handle files without frontmatter gracefully
+  - [✅] Parse YAML using YamlDotNet
+  - [✅] Support simple string format: `NAME: "description"`
+  - [✅] Support object format: `NAME: { description, required, default }`
+  - [✅] Validate: optional variables must have defaults
+  - [✅] Validate: variable names follow `^[A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*$` pattern (with dot-notation)
+  - [✅] **Conflict detection:** Cannot have both `X` and `X.Y` defined
+  - [✅] Collect all parsing errors (don't fail on first)
+  - [✅] Return structured Result with errors
+- [✅] Implement `VariableExtractor.cs`
+  - [✅] Method: `ExtractVariables(string content)` returns list of found variables
+  - [✅] Method: `ValidateVariableFormat(string content)` returns `ProcessingResult<Unit>`
+  - [✅] Regex: `\{\{([A-Z][A-Z0-9_]*(?:\.[A-Z][A-Z0-9_]*)*)\}\}`
+  - [✅] Find all `{{VARIABLE_NAME}}` patterns
+  - [✅] Support nested paths: `{{USER.NAME}}`, `{{API.KEY}}`
+  - [✅] Extract unique variable names (deduplicate)
+  - [✅] Validate variable format (no malformed syntax)
+  - [✅] Handle edge cases: `{{`, `}}` without pairs
+- [✅] Implement `SchemaGenerator.cs`
+  - [✅] Method: `GenerateSchema(Dictionary<string, VariableDefinition>)` returns JSON string
+  - [✅] Convert variables to JSON schema object
+  - [✅] **lowerCamelCase conversion:** `USER_NAME` → `userName`
+  - [✅] Use description as placeholder value for required vars
+  - [✅] Include default values for optional vars
+  - [✅] Support nested object structure via dot notation
+  - [✅] Example: `USER.NAME` → `{"user": {"name": "..."}}`
+  - [✅] Pretty-print JSON output
+- [✅] Implement `VariableSubstitutor.cs`
+  - [✅] Method: `Substitute(content, variables, args)` returns `ProcessingResult<string>`
+  - [✅] **Case-insensitive JSON matching:** `userName`, `user_name`, `UserName` all match `USER_NAME`
+  - [✅] Parse nested objects via dot notation
+  - [✅] Replace `{{VAR}}` with actual values
+  - [✅] Handle optional variables (use defaults if not provided)
+  - [✅] Detect missing required variables (collect all)
+  - [✅] Validate all variables before substitution
+  - [✅] Return Result with errors or substituted content
+- [✅] **Tests:** 84 tests passing (100% pass rate)
+- [✅] **QA Status:** PASS
 
 ### Utilities (Utilities/)
 - [ ] Implement `JsonOutput.cs`
