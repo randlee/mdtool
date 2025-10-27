@@ -224,7 +224,7 @@ public class VariableSubstitutorTests
 
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Contains("EMAIL", result.Errors[0].Variable);
+        Assert.Contains("EMAIL", result.Errors.First().Variable);
     }
 
     [Fact]

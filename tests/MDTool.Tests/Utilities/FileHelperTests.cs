@@ -59,7 +59,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileNotFound, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileNotFound, result.Errors.First().Type);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileSizeExceeded, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileSizeExceeded, result.Errors.First().Type);
     }
 
     #endregion
@@ -198,7 +198,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileExists, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileExists, result.Errors.First().Type);
 
         // Verify original content is unchanged
         var actualContent = await File.ReadAllTextAsync(filePath);
@@ -270,7 +270,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -282,7 +282,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -297,7 +297,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.ProcessingError, result.Errors[0].Type);
+        Assert.Equal(ErrorType.ProcessingError, result.Errors.First().Type);
     }
 
     [Fact]
@@ -356,7 +356,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -368,7 +368,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.InvalidPath, result.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidPath, result.Errors.First().Type);
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.PathTraversalAttempt, result.Errors[0].Type);
+        Assert.Equal(ErrorType.PathTraversalAttempt, result.Errors.First().Type);
     }
 
     [Fact]
@@ -410,7 +410,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.PathTraversalAttempt, result.Errors[0].Type);
+        Assert.Equal(ErrorType.PathTraversalAttempt, result.Errors.First().Type);
     }
 
     [Fact]
@@ -473,7 +473,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileSizeExceeded, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileSizeExceeded, result.Errors.First().Type);
     }
 
     [Fact]
@@ -503,7 +503,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileNotFound, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileNotFound, result.Errors.First().Type);
     }
 
     [Fact]
@@ -535,7 +535,7 @@ public class FileHelperTests : IDisposable
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileSizeExceeded, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileSizeExceeded, result.Errors.First().Type);
     }
 
     [Fact]

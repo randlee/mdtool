@@ -33,13 +33,11 @@ public class MarkdownParser
     /// </summary>
     /// <param name="content">The markdown content string to parse</param>
     /// <returns>ProcessingResult containing MarkdownDocument or errors</returns>
-    public ProcessingResult<MarkdownDocument> ParseContent(string content)
+    public ProcessingResult<MarkdownDocument> ParseContent(string? content)
     {
         if (content == null)
         {
-            return ProcessingResult<MarkdownDocument>.Fail(
-                ValidationError.ProcessingError("Content cannot be null")
-            );
+            return ProcessingResult<MarkdownDocument>.Fail( ValidationError.ProcessingError("Content cannot be null") );
         }
 
         var errors = new List<ValidationError>();

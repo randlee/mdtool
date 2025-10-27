@@ -56,7 +56,7 @@ This is a test document for {{PROJECT_NAME}}.";
         // Assert: Verify the pipeline worked
         Assert.True(parseResult.Success, "Parse should succeed");
         var doc = parseResult.Value;
-        Assert.NotNull(doc.Variables);
+        Assert.NotNull(doc?.Variables);
         Assert.Equal(2, doc.Variables.Count);
         Assert.True(doc.Variables.ContainsKey("USER_NAME"));
         Assert.Contains("{{USER_NAME}}", doc.Content);
@@ -75,8 +75,8 @@ This is a test document for {{PROJECT_NAME}}.";
         // Assert: FileHelper error should propagate correctly
         Assert.False(readResult.Success, "File read should fail");
         Assert.Single(readResult.Errors);
-        Assert.Equal(ErrorType.FileNotFound, readResult.Errors[0].Type);
-        Assert.Contains("not found", readResult.Errors[0].Description, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(ErrorType.FileNotFound, readResult.Errors.First().Type);
+        Assert.Contains("not found", readResult.Errors.First().Description, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ Content";
         // Assert: Parser error should be returned
         Assert.False(parseResult.Success, "Parse should fail");
         Assert.Single(parseResult.Errors);
-        Assert.Equal(ErrorType.InvalidYamlHeader, parseResult.Errors[0].Type);
+        Assert.Equal(ErrorType.InvalidYamlHeader, parseResult.Errors.First().Type);
     }
 
     #endregion
@@ -229,10 +229,12 @@ Welcome to {{PROJECT_NAME}}.";
         var parser = new MarkdownParser();
         var parseResult = parser.ParseContent(readResult.Value);
         Assert.True(parseResult.Success);
-
+        Assert.NotNull(parseResult.Value?.Variables);
+        
         // 3. Substitute variables
         var substituteResult = VariableSubstitutor.Substitute(parseResult.Value.Content, parseResult.Value.Variables, args);
         Assert.True(substituteResult.Success);
+        Assert.NotNull(substituteResult.Value);
 
         // 4. Write result
         var writeResult = await FileHelper.WriteFileAsync(outputFile, substituteResult.Value);
@@ -270,7 +272,8 @@ Missing: {{MISSING_VAR}}";
         var parser = new MarkdownParser();
         var parseResult = parser.ParseContent(readResult.Value);
         Assert.True(parseResult.Success);
-
+        Assert.NotNull(parseResult.Value?.Content);
+        
         // Substitute with empty variables (should fail)
         var emptyArgs = new Dictionary<string, object>();
         var substituteResult = VariableSubstitutor.Substitute(parseResult.Value.Content, parseResult.Value.Variables, emptyArgs);
@@ -304,9 +307,12 @@ Variables: {{VAR1}}, {{VAR2}}";
 
         // Act: Pipeline ending with JSON output
         var readResult = await FileHelper.ReadFileAsync(inputFile);
+        Assert.NotNull(readResult.Value);
         var parser = new MarkdownParser();
-        var parseResult = parser.ParseContent(readResult.Value!);
-        var schemaJson = SchemaGenerator.GenerateSchema(parseResult.Value!.Variables);
+
+        var parseResult = parser.ParseContent(readResult.Value);
+        Assert.NotNull(parseResult.Value?.Variables);
+        var schemaJson = SchemaGenerator.GenerateSchema(parseResult.Value.Variables);
 
         // Wrap in command response
         var commandResult = JsonOutput.Success(new { schema = schemaJson });
@@ -331,7 +337,6 @@ Variables: {{VAR1}}, {{VAR2}}";
         var content = "# Hello {{USER_NAME}}";
 
         // Create a ProcessingResult and chain operations
-        var parseResult = ProcessingResult<string>.Ok(content);
         var extractedVars = VariableExtractor.ExtractVariables(content);
 
         // Create variables from extracted names

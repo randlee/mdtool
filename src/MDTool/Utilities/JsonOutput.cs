@@ -67,7 +67,7 @@ public static class JsonOutput
     /// </summary>
     /// <param name="errors">List of validation or processing errors</param>
     /// <returns>JSON string with success=false and error details</returns>
-    public static string Failure(List<ValidationError> errors)
+    public static string Failure(IReadOnlyCollection<ValidationError> errors)
     {
         try
         {

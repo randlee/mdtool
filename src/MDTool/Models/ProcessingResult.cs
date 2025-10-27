@@ -20,12 +20,12 @@ public class ProcessingResult<T>
     /// <summary>
     /// List of errors (only populated if Success is false).
     /// </summary>
-    public List<ValidationError> Errors { get; init; }
+    public IReadOnlyCollection<ValidationError> Errors { get; init; }
 
     /// <summary>
     /// Private constructor - use factory methods.
     /// </summary>
-    private ProcessingResult(bool success, T value, List<ValidationError> errors)
+    private ProcessingResult(bool success, T value, IReadOnlyCollection<ValidationError> errors)
     {
         Success = success;
         Value = value;
@@ -50,17 +50,19 @@ public class ProcessingResult<T>
     /// <summary>
     /// Creates a failed result with errors.
     /// </summary>
-    public static ProcessingResult<T> Fail(List<ValidationError> errors)
+    public static ProcessingResult<T> Fail(IEnumerable<ValidationError> errors)
     {
-        if (errors == null || errors.Count == 0)
+        // ReSharper disable PossibleMultipleEnumeration
+        if (errors == null || !errors.Any())
             throw new ArgumentException("Failed result must have errors", nameof(errors));
         
         // ReSharper disable once NullableWarningSuppressionIsUsed
         return new ProcessingResult<T>(
             success: false,
             value: default!,
-            errors: errors
+            errors: errors.ToArray()
         );
+        // ReSharper restore PossibleMultipleEnumeration
     }
 
     /// <summary>

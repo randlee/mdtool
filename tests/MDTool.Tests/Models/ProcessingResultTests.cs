@@ -57,7 +57,7 @@ public class ProcessingResultTests
         // Assert
         Assert.False(result.Success);
         Assert.Single(result.Errors);
-        Assert.Equal(ErrorType.FileNotFound, result.Errors[0].Type);
+        Assert.Equal(ErrorType.FileNotFound, result.Errors.First().Type);
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class ProcessingResultTests
         // Assert
         Assert.False(mapped.Success);
         Assert.Single(mapped.Errors);
-        Assert.Equal(ErrorType.FileNotFound, mapped.Errors[0].Type);
+        Assert.Equal(ErrorType.FileNotFound, mapped.Errors.First().Type);
     }
 
     [Fact]
@@ -141,8 +141,8 @@ public class ProcessingResultTests
         // Assert
         Assert.False(mapped.Success);
         Assert.Single(mapped.Errors);
-        Assert.Equal(ErrorType.ProcessingError, mapped.Errors[0].Type);
-        Assert.Contains("Test error", mapped.Errors[0].Description);
+        Assert.Equal(ErrorType.ProcessingError, mapped.Errors.First().Type);
+        Assert.Contains("Test error", mapped.Errors.First().Description);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class ProcessingResultTests
         // Assert
         Assert.False(bound.Success);
         Assert.Single(bound.Errors);
-        Assert.Equal(ErrorType.FileNotFound, bound.Errors[0].Type);
+        Assert.Equal(ErrorType.FileNotFound, bound.Errors.First().Type);
     }
 
     [Fact]
@@ -189,7 +189,7 @@ public class ProcessingResultTests
         // Assert
         Assert.False(bound.Success);
         Assert.Single(bound.Errors);
-        Assert.Contains("Failed in second operation", bound.Errors[0].Description);
+        Assert.Contains("Failed in second operation", bound.Errors.First().Description);
     }
 
     [Fact]
@@ -392,7 +392,7 @@ public class ProcessingResultTests
         // Assert
         Assert.False(final.Success);
         Assert.Single(final.Errors);
-        Assert.Contains("Mid-chain error", final.Errors[0].Description);
+        Assert.Contains("Mid-chain error", final.Errors.First().Description);
     }
 
     #endregion
