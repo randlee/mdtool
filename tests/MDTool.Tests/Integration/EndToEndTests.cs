@@ -37,16 +37,23 @@ namespace MDTool.Tests.Integration
 
         public void Dispose()
         {
-            // Clean up test directory
+            // Small delay to ensure all processes have fully released file handles
+            Thread.Sleep(100);
+
+            // Clean up test directory with retry logic
             if (Directory.Exists(_testDirectory))
             {
-                try
+                for (int i = 0; i < 3; i++)
                 {
-                    Directory.Delete(_testDirectory, recursive: true);
-                }
-                catch
-                {
-                    // Ignore cleanup errors
+                    try
+                    {
+                        Directory.Delete(_testDirectory, recursive: true);
+                        break;
+                    }
+                    catch
+                    {
+                        if (i < 2) Thread.Sleep(100);
+                    }
                 }
             }
         }
@@ -72,6 +79,9 @@ namespace MDTool.Tests.Integration
                 throw new InvalidOperationException("Failed to start mdtool process");
             }
 
+            // Small delay to ensure process is fully initialized
+            await Task.Delay(50);
+
             var outputTask = process.StandardOutput.ReadToEndAsync();
             var errorTask = process.StandardError.ReadToEndAsync();
 
@@ -79,6 +89,9 @@ namespace MDTool.Tests.Integration
 
             var output = await outputTask;
             var error = await errorTask;
+
+            // Small delay to ensure process has fully terminated
+            await Task.Delay(100);
 
             return (process.ExitCode, output, error);
         }
@@ -104,6 +117,8 @@ variables:
 Welcome to {{APP_NAME}}!
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Step 2: Run get-schema command
             var schemaPath = Path.Combine(_testDirectory, "schema.json");
@@ -124,6 +139,8 @@ Welcome to {{APP_NAME}}!
   ""version"": ""2.0.0""
 }";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Step 4: Run validate command (should pass)
             var (validateExitCode, validateOutput, validateError) = await RunCommand($"validate \"{templatePath}\" --args \"{argsPath}\"");
@@ -160,6 +177,8 @@ Welcome to {{APP_NAME}}!
 Your account {{ACCOUNT_ID}} is ready.
 ";
             await File.WriteAllTextAsync(docPath, docContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Step 2: Run generate-header
             var headerPath = Path.Combine(_testDirectory, "header.yaml");
@@ -177,6 +196,8 @@ Your account {{ACCOUNT_ID}} is ready.
             var templatePath = Path.Combine(_testDirectory, "template.md");
             var templateContent = headerContent + docContent;
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Step 4: Create args and run process
             var argsPath = Path.Combine(_testDirectory, "args.json");
@@ -185,6 +206,8 @@ Your account {{ACCOUNT_ID}} is ready.
   ""accountId"": ""12345""
 }";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var (processExitCode, processOutput, processError) = await RunCommand($"process \"{templatePath}\" --args \"{argsPath}\"");
 
@@ -208,10 +231,14 @@ variables:
 # {{NAME}}
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var argsPath = Path.Combine(_testDirectory, "args.json");
             var argsContent = @"{""name"": ""Test""}";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var outputPath = Path.Combine(_testDirectory, "output.md");
 
@@ -271,11 +298,15 @@ variables:
 # {{NAME}}
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Create invalid JSON args
             var argsPath = Path.Combine(_testDirectory, "invalid.json");
             var invalidJson = @"{ invalid json }";
             await File.WriteAllTextAsync(argsPath, invalidJson);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var (exitCode, output, error) = await RunCommand($"validate \"{templatePath}\" --args \"{argsPath}\"");
 
@@ -300,11 +331,15 @@ variables:
 # {{NAME}} - {{EMAIL}}
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Create args with only one variable
             var argsPath = Path.Combine(_testDirectory, "args.json");
             var argsContent = @"{""name"": ""Test""}";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var (exitCode, output, error) = await RunCommand($"validate \"{templatePath}\" --args \"{argsPath}\"");
 
@@ -336,6 +371,8 @@ Email: {{USER.EMAIL}}
 DB: {{CONFIG.DB.HOST}}
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Create nested args
             var argsPath = Path.Combine(_testDirectory, "args.json");
@@ -351,6 +388,8 @@ DB: {{CONFIG.DB.HOST}}
   }
 }";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Validate
             var (validateExitCode, validateOutput, validateError) = await RunCommand($"validate \"{templatePath}\" --args \"{argsPath}\"");
@@ -389,11 +428,15 @@ variables:
 Debug: {{DEBUG}}
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Create args with only required variable
             var argsPath = Path.Combine(_testDirectory, "args.json");
             var argsContent = @"{""name"": ""TestApp""}";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Process should use defaults
             var (processExitCode, processOutput, processError) = await RunCommand($"process \"{templatePath}\" --args \"{argsPath}\"");
@@ -421,6 +464,8 @@ variables:
 # Content
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var (exitCode, output, error) = await RunCommand($"get-schema \"{templatePath}\"");
 
@@ -456,6 +501,8 @@ variables:
 # {{USER_NAME}} - {{USER_EMAIL}}
 ";
             await File.WriteAllTextAsync(templatePath, templateContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             // Create args with different casing
             var argsPath = Path.Combine(_testDirectory, "args.json");
@@ -464,6 +511,8 @@ variables:
   ""userEmail"": ""charlie@example.com""
 }";
             await File.WriteAllTextAsync(argsPath, argsContent);
+            // Small delay to ensure file system has flushed the write
+            await Task.Delay(50);
 
             var (processExitCode, processOutput, processError) = await RunCommand($"process \"{templatePath}\" --args \"{argsPath}\"");
 
