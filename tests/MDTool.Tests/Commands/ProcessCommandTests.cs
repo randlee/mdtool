@@ -30,24 +30,38 @@ public class ProcessCommandTests : IDisposable
 
     public void Dispose()
     {
+        // Small delay to ensure all processes have fully released file handles
+        Thread.Sleep(100);
+
         foreach (var file in _tempFiles)
         {
             if (File.Exists(file))
             {
-                File.Delete(file);
+                try
+                {
+                    File.Delete(file);
+                }
+                catch
+                {
+                    // Ignore cleanup errors
+                }
             }
         }
 
-        // Clean up test directory
+        // Clean up test directory with retry logic
         if (Directory.Exists(_testDirectory))
         {
-            try
+            for (int i = 0; i < 3; i++)
             {
-                Directory.Delete(_testDirectory, recursive: true);
-            }
-            catch
-            {
-                // Ignore cleanup errors
+                try
+                {
+                    Directory.Delete(_testDirectory, recursive: true);
+                    break;
+                }
+                catch
+                {
+                    if (i < 2) Thread.Sleep(100);
+                }
             }
         }
     }
@@ -57,6 +71,8 @@ public class ProcessCommandTests : IDisposable
         var path = Path.GetTempFileName();
         File.WriteAllText(path, content);
         _tempFiles.Add(path);
+        // Small delay to ensure file system has flushed the write
+        Thread.Sleep(50);
         return path;
     }
 
@@ -288,6 +304,9 @@ variables:
             throw new InvalidOperationException("Failed to start process");
         }
 
+        // Small delay to ensure process is fully initialized
+        await Task.Delay(50);
+
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
 
@@ -295,6 +314,9 @@ variables:
 
         var output = await outputTask;
         var error = await errorTask;
+
+        // Small delay to ensure process has fully terminated
+        await Task.Delay(100);
 
         return (process.ExitCode, output, error);
     }
