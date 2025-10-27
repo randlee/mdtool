@@ -9,10 +9,6 @@ jobs:
   publish:
     name: Build, Test, and Publish
     runs-on: ubuntu-latest
-    environment: production
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
     - name: Checkout code
@@ -43,15 +39,8 @@ jobs:
         echo "Package ID: Rand.MDTool"
         echo "Version: $(grep -oP '(?<=<Version>)[^<]+' src/MDTool/MDTool.csproj)"
 
-    - name: Get OIDC token
-      id: oidc
-      run: |
-        OIDC_TOKEN=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | jq -r '.value')
-        echo "::add-mask::$OIDC_TOKEN"
-        echo "token=$OIDC_TOKEN" >> $GITHUB_OUTPUT
-
     - name: Publish to NuGet
-      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ steps.oidc.outputs.token }} --skip-duplicate
+      run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }} --skip-duplicate
 
     - name: Upload package as artifact
       uses: actions/upload-artifact@v4
