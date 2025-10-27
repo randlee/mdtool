@@ -23,9 +23,8 @@ public static class FileHelper
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.InvalidPath(path ?? "", "File path cannot be null or empty")
-            );
+            // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
+            return ProcessingResult<string>.Fail( ValidationError.InvalidPath(path ?? "", "File path cannot be null or empty") );
         }
 
         // Validate path security
@@ -35,14 +34,13 @@ public static class FileHelper
             return ProcessingResult<string>.Fail(pathResult.Errors);
         }
 
+        // ReSharper disable once NullableWarningSuppressionIsUsed
         var validatedPath = pathResult.Value!;
 
         // Check file exists
         if (!File.Exists(validatedPath))
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.FileNotFound(validatedPath)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.FileNotFound(validatedPath) );
         }
 
         // Check file size
@@ -60,21 +58,15 @@ public static class FileHelper
         }
         catch (UnauthorizedAccessException)
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.FileAccessDenied(validatedPath)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.FileAccessDenied(validatedPath) );
         }
         catch (IOException ex)
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.FileReadError(validatedPath, ex.Message)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.FileReadError(validatedPath, ex.Message) );
         }
         catch (Exception ex)
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.FileReadError(validatedPath, ex.Message)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.FileReadError(validatedPath, ex.Message) );
         }
     }
 
@@ -90,16 +82,14 @@ public static class FileHelper
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.InvalidPath(path ?? "", "File path cannot be null or empty")
-            );
+            // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
+            return ProcessingResult<Unit>.Fail( ValidationError.InvalidPath(path ?? "", "File path cannot be null or empty") );
         }
 
+        // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
         if (content == null)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.ProcessingError("Content cannot be null")
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.ProcessingError("Content cannot be null") );
         }
 
         // Validate path security
@@ -109,14 +99,13 @@ public static class FileHelper
             return ProcessingResult<Unit>.Fail(pathResult.Errors);
         }
 
+        // ReSharper disable once NullableWarningSuppressionIsUsed
         var validatedPath = pathResult.Value!;
 
         // Check if file exists and force flag
         if (File.Exists(validatedPath) && !force)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileExists(validatedPath)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileExists(validatedPath) );
         }
 
         // Create parent directories if they don't exist
@@ -129,21 +118,15 @@ public static class FileHelper
             }
             catch (UnauthorizedAccessException ex)
             {
-                return ProcessingResult<Unit>.Fail(
-                    ValidationError.DirectoryCreationFailed(directory, ex.Message)
-                );
+                return ProcessingResult<Unit>.Fail( ValidationError.DirectoryCreationFailed(directory, ex.Message) );
             }
             catch (IOException ex)
             {
-                return ProcessingResult<Unit>.Fail(
-                    ValidationError.DirectoryCreationFailed(directory, ex.Message)
-                );
+                return ProcessingResult<Unit>.Fail( ValidationError.DirectoryCreationFailed(directory, ex.Message) );
             }
             catch (Exception ex)
             {
-                return ProcessingResult<Unit>.Fail(
-                    ValidationError.DirectoryCreationFailed(directory, ex.Message)
-                );
+                return ProcessingResult<Unit>.Fail( ValidationError.DirectoryCreationFailed(directory, ex.Message) );
             }
         }
 
@@ -155,21 +138,15 @@ public static class FileHelper
         }
         catch (UnauthorizedAccessException)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileAccessDenied(validatedPath)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileAccessDenied(validatedPath) );
         }
         catch (IOException ex)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileWriteError(validatedPath, ex.Message)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileWriteError(validatedPath, ex.Message) );
         }
         catch (Exception ex)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileWriteError(validatedPath, ex.Message)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileWriteError(validatedPath, ex.Message) );
         }
     }
 
@@ -185,9 +162,8 @@ public static class FileHelper
     {
         if (string.IsNullOrWhiteSpace(path))
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.InvalidPath(path ?? "", "Path cannot be null or empty")
-            );
+            // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract
+            return ProcessingResult<string>.Fail( ValidationError.InvalidPath(path ?? "", "Path cannot be null or empty") );
         }
 
         try
@@ -200,9 +176,7 @@ public static class FileHelper
             {
                 if (path.Contains("..") || path.Contains("~"))
                 {
-                    return ProcessingResult<string>.Fail(
-                        ValidationError.PathTraversalAttempt(path)
-                    );
+                    return ProcessingResult<string>.Fail( ValidationError.PathTraversalAttempt(path) );
                 }
             }
 
@@ -210,30 +184,22 @@ public static class FileHelper
             var invalidChars = Path.GetInvalidPathChars();
             if (path.Any(c => invalidChars.Contains(c)))
             {
-                return ProcessingResult<string>.Fail(
-                    ValidationError.InvalidPath(path, "Path contains invalid characters")
-                );
+                return ProcessingResult<string>.Fail( ValidationError.InvalidPath(path, "Path contains invalid characters") );
             }
 
             return ProcessingResult<string>.Ok(absolutePath);
         }
         catch (ArgumentException ex)
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.InvalidPath(path, ex.Message)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.InvalidPath(path, ex.Message) );
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.FileAccessDenied(path)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.FileAccessDenied(path) );
         }
         catch (Exception ex)
         {
-            return ProcessingResult<string>.Fail(
-                ValidationError.InvalidPath(path, ex.Message)
-            );
+            return ProcessingResult<string>.Fail( ValidationError.InvalidPath(path, ex.Message) );
         }
     }
 
@@ -247,9 +213,7 @@ public static class FileHelper
     {
         if (!File.Exists(path))
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileNotFound(path)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileNotFound(path) );
         }
 
         try
@@ -259,30 +223,22 @@ public static class FileHelper
 
             if (fileSizeBytes > maxSizeBytes)
             {
-                return ProcessingResult<Unit>.Fail(
-                    ValidationError.FileSizeExceeded(path, fileSizeBytes, maxSizeBytes)
-                );
+                return ProcessingResult<Unit>.Fail( ValidationError.FileSizeExceeded(path, fileSizeBytes, maxSizeBytes) );
             }
 
             return ProcessingResult<Unit>.Ok(Unit.Value);
         }
         catch (UnauthorizedAccessException)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileAccessDenied(path)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileAccessDenied(path) );
         }
         catch (IOException ex)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileReadError(path, ex.Message)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileReadError(path, ex.Message) );
         }
         catch (Exception ex)
         {
-            return ProcessingResult<Unit>.Fail(
-                ValidationError.FileReadError(path, ex.Message)
-            );
+            return ProcessingResult<Unit>.Fail( ValidationError.FileReadError(path, ex.Message) );
         }
     }
 

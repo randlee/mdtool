@@ -25,7 +25,7 @@ public class ProcessingResult<T>
     /// <summary>
     /// Private constructor - use factory methods.
     /// </summary>
-    private ProcessingResult(bool success, T? value, List<ValidationError> errors)
+    private ProcessingResult(bool success, T value, List<ValidationError> errors)
     {
         Success = success;
         Value = value;
@@ -54,10 +54,11 @@ public class ProcessingResult<T>
     {
         if (errors == null || errors.Count == 0)
             throw new ArgumentException("Failed result must have errors", nameof(errors));
-
+        
+        // ReSharper disable once NullableWarningSuppressionIsUsed
         return new ProcessingResult<T>(
             success: false,
-            value: default,
+            value: default!,
             errors: errors
         );
     }
@@ -91,6 +92,7 @@ public class ProcessingResult<T>
 
         try
         {
+            // ReSharper disable once NullableWarningSuppressionIsUsed
             var mapped = mapper(Value!);
             return ProcessingResult<TOut>.Ok(mapped);
         }
@@ -110,6 +112,7 @@ public class ProcessingResult<T>
         if (!Success)
             return ProcessingResult<TOut>.Fail(Errors);
 
+        // ReSharper disable once NullableWarningSuppressionIsUsed
         return binder(Value!);
     }
 
@@ -119,15 +122,10 @@ public class ProcessingResult<T>
     /// </summary>
     public T GetValueOrThrow()
     {
-        if (!Success)
-        {
-            var errorMessages = string.Join("; ", Errors.Select(e => e.Description));
-            throw new InvalidOperationException(
-                $"Cannot get value from failed result: {errorMessages}"
-            );
-        }
-
-        return Value!;
+        // ReSharper disable once NullableWarningSuppressionIsUsed
+        if (Success) return Value!;
+        var errorMessages = string.Join("; ", Errors.Select(e => e.Description));
+        throw new InvalidOperationException($"Cannot get value from failed result: {errorMessages}");
     }
 
     /// <summary>
@@ -205,10 +203,7 @@ public class ProcessingResult
     /// <summary>
     /// Creates a failed result from a single error.
     /// </summary>
-    public static ProcessingResult Fail(ValidationError error)
-    {
-        return Fail(new List<ValidationError> { error });
-    }
+    public static ProcessingResult Fail(ValidationError error) => Fail([error]);
 
     /// <summary>
     /// Creates a failed result from a ValidationResult.
