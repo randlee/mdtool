@@ -25,9 +25,10 @@ jobs:
     - name: Build
       run: dotnet build --configuration Release --no-restore
 
-    # TODO: Re-enable after fixing flaky CI tests (process-spawning race conditions)
-    # - name: Run tests
-    #   run: dotnet test --configuration Release --no-build --verbosity normal
+    - name: Run tests
+      env:
+        CONFIGURATION: Release
+      run: dotnet test --configuration Release --no-build --verbosity normal
 
     - name: Create NuGet package
       run: dotnet pack src/MDTool/MDTool.csproj --configuration Release --no-build --output ./nupkg
